@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<phpunit
+	bootstrap="tests/bootstrap.php"
+	backupGlobals="false"
+	colors="true"
+	beStrictAboutTestsThatDoNotTestAnything="true"
+	convertDeprecationsToExceptions="false"
+	>
+
+	<testsuites>
+		<testsuite name="Hopelessly Sensible">
+			<directory suffix=".php">tests/cases</directory>
+		</testsuite>
+	</testsuites>
+
+</phpunit>

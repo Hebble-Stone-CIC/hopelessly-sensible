@@ -1,0 +1,48 @@
+<?php
+/**
+ * Local paths for the test suite, on this machine only.
+ *
+ * Copy this file to tests/wp-tests-config-local.php and edit it. That copy is
+ * ignored by git, so nobody else ever sees your directory layout.
+ *
+ * Every key here can equally be set as an environment variable, which is what
+ * continuous integration should do. The variable name is the key in upper case
+ * with a HOPSEN_ prefix: wp_root becomes HOPSEN_WP_ROOT, and so on. This file
+ * wins where both are set.
+ *
+ * Only the first two usually need changing.
+ *
+ * @package HopelesslySensible
+ */
+
+return array(
+
+	// A WordPress installation: the directory holding wp-settings.php.
+	'wp_root'   => '/path/to/a/wordpress/site/app/public',
+
+	/*
+	 * A MySQL socket, if your setup uses one. Local, MAMP, DBngin and Docker
+	 * Desktop all do. Leave it empty to use db_host below instead.
+	 */
+	'db_socket' => '',
+
+	// An ordinary host and port. Ignored whenever db_socket is set.
+	'db_host'   => '127.0.0.1',
+
+	// Credentials for that server. It needs permission to create a database.
+	'db_user'   => 'root',
+	'db_pass'   => 'root',
+
+	/*
+	 * The database the suite installs into. EVERY TABLE IN IT IS DROPPED BEFORE
+	 * EVERY RUN, so give it a name no real site would ever have.
+	 * tests/bootstrap.php refuses to start if this looks like a real site.
+	 */
+	'db_name'   => 'hopsen_tests',
+
+	/*
+	 * A theme the installer can find. The default only exists on WordPress 7.0
+	 * and later, so name an older one when testing the plugin's minimum.
+	 */
+	'theme'     => 'twentytwentyfive',
+);

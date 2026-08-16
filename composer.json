@@ -1,0 +1,57 @@
+{
+	"name": "hebblestone/hopelessly-sensible",
+	"description": "Security hardening for people who have better things to do.",
+	"type": "wordpress-plugin",
+	"license": "GPL-2.0-or-later",
+	"require": {
+		"php": ">=7.4"
+	},
+	"require-dev": {
+		"squizlabs/php_codesniffer": "^3.9",
+		"wp-coding-standards/wpcs": "^3.1",
+		"phpcompatibility/phpcompatibility-wp": "^2.1",
+		"dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+		"phpunit/phpunit": "^9.6",
+		"yoast/phpunit-polyfills": "^2.0",
+		"wp-phpunit/wp-phpunit": "^7.0"
+	},
+	"scripts": {
+		"lint": [
+			"@lint:phpcs",
+			"@lint:namespace"
+		],
+		"lint:phpcs": "phpcs",
+		"lint:namespace": "grep -rnE \"(new|instanceof)[[:space:]]+WP_\" inc/ && echo '  ^^ core class used without a leading backslash inside a namespace' && exit 1 || exit 0",
+		"lint:fix": "phpcbf",
+		"test": "phpunit",
+		"check": [
+			"@lint",
+			"@test"
+		],
+		"build:committed": "git diff-index --quiet HEAD -- || (echo '' && echo 'Refusing to build: the working tree has uncommitted changes, and the zip is built from HEAD. Commit first, or you will ship code you are not looking at.' && exit 1)",
+		"build": [
+			"@build:committed",
+			"@check",
+			"rm -rf build",
+			"mkdir -p build/staging build/hopelessly-sensible",
+			"git archive --format=tar HEAD | tar -x -C build/staging",
+			"rsync -a --exclude-from=.distignore build/staging/ build/hopelessly-sensible/",
+			"rm -rf build/staging",
+			"cd build && zip -rq hopelessly-sensible.zip hopelessly-sensible",
+			"echo '' && echo 'build/hopelessly-sensible.zip' && unzip -l build/hopelessly-sensible.zip"
+		]
+	},
+	"scripts-descriptions": {
+		"lint": "Coding standards, then a check that no core class is referenced unqualified.",
+		"lint:namespace": "PHP falls back to the global namespace for functions and constants, but not for classes. WP_Error inside our namespace is a fatal that phpcs cannot see.",
+		"test": "The WordPress core test suite. Needs a MySQL server and a WordPress codebase; see tests/wp-tests-config.php for the two paths it expects.",
+		"check": "Everything that has to pass before a change is finished: lint, then tests.",
+		"build:committed": "Refuses to build from a dirty working tree, because the zip comes from HEAD and would not contain your uncommitted fix.",
+		"build": "The zip to upload. Exports tracked files from HEAD, then strips what .distignore names, so nothing untracked can ever be shipped by accident. Zips the folder rather than its contents, which is what wordpress.org expects, and runs check first so a failing build cannot be uploaded."
+	},
+	"config": {
+		"allow-plugins": {
+			"dealerdirect/phpcodesniffer-composer-installer": true
+		}
+	}
+}

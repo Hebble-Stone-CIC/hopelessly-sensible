@@ -1,0 +1,121 @@
+<?xml version="1.0"?>
+<ruleset name="Hopelessly Sensible">
+
+	<description>WordPress Coding Standards for the Hopelessly Sensible plugin.</description>
+
+	<!-- Scan everything in the plugin, excluding tooling and build output. -->
+	<file>.</file>
+	<exclude-pattern>/vendor/*</exclude-pattern>
+	<exclude-pattern>/node_modules/*</exclude-pattern>
+
+	<!-- Show progress, show the sniff name on each error, use colour. -->
+	<arg value="ps"/>
+	<arg name="colors"/>
+	<arg name="extensions" value="php"/>
+	<arg name="parallel" value="8"/>
+
+	<!-- The full WordPress standard: core style, docs, extra rules. -->
+	<rule ref="WordPress"/>
+
+	<!-- Minimum supported versions. Drives the deprecation and compatibility checks. -->
+	<config name="minimum_wp_version" value="6.5"/>
+	<config name="testVersion" value="7.4-"/>
+
+	<!--
+		Syntax and functions that do not exist in PHP 7.4, which readme.txt
+		declares as the minimum.
+
+		The testVersion above sets what to compare against and nothing more. It
+		was here on its own for a while, with phpcompatibility-wp installed and
+		this line missing, so the setting was read by nobody and the check never
+		ran. A config with no rule to configure fails silently and looks exactly
+		like a check that is passing.
+
+		Tests are excluded: they run on whatever PHP the developer has, never on
+		a subscriber's 7.4 host, and holding them to it would be inventing a
+		constraint nobody has.
+	-->
+	<rule ref="PHPCompatibilityWP">
+		<exclude-pattern>/tests/*</exclude-pattern>
+	</rule>
+
+	<!--
+		Every translation call must use this text domain, and it must match the
+		plugin slug. The review team checks this.
+
+		'default' is core's own text domain, and is permitted deliberately. Where
+		this plugin refuses a request or reports a failed login, it reuses core's
+		existing wording rather than writing its own, so that the message arrives
+		already translated in every locale WordPress ships and reads exactly like
+		a refusal from WordPress itself. Passing 'default' explicitly is identical
+		to omitting the argument, since that is the parameter's default value, but
+		it says out loud that the choice was made on purpose.
+	-->
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array">
+				<element value="hopelessly-sensible"/>
+				<element value="default"/>
+			</property>
+		</properties>
+	</rule>
+
+	<!--
+		Every global function, class, constant, option and hook name must start
+		with one of these. Also a review requirement.
+	-->
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<properties>
+			<property name="prefixes" type="array">
+				<element value="hopsen"/>
+				<element value="HopelesslySensible"/>
+			</property>
+		</properties>
+	</rule>
+
+	<!--
+		Closures cannot be removed from hooks once added, so they are banned as
+		callbacks throughout this plugin. Every hook callback is a named method.
+	-->
+	<rule ref="WordPress.WP.AlternativeFunctions"/>
+
+	<!--
+		The one unprefixed constant this plugin defines is DISALLOW_FILE_EDIT,
+		which belongs to core and is the documented way to take the theme and
+		plugin editors out of the dashboard. A prefixed name would define a
+		constant nothing reads. The exclusion is scoped to the single file that
+		does it, so anything else defining an unprefixed constant still fails.
+	-->
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound">
+		<exclude-pattern>/inc/features/class-file-edit\.php$</exclude-pattern>
+	</rule>
+
+	<!--
+		The test suite is held to the same style as the plugin, deliberately:
+		tabs, Yoda conditions, docblocks, named functions on hooks. Four rules
+		are dropped for it, and only for it, because they describe a plugin
+		talking to WordPress rather than a test harness setting one up.
+
+		The names a test harness has to use are not its own to choose. The core
+		test suite is configured through constants it defines (DB_NAME, ABSPATH,
+		WP_TESTS_DOMAIN) and a $table_prefix global, and the WooCommerce stub has
+		to be called WooCommerce or it stands in for nothing. Test files are
+		named for the thing they test rather than the class they contain, which
+		is how WordPress core names its own. And a bootstrap that refuses to run
+		reports it before WordPress exists, so there is no escaping function to
+		reach for.
+	-->
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<exclude-pattern>/tests/*</exclude-pattern>
+	</rule>
+	<rule ref="WordPress.WP.GlobalVariablesOverride">
+		<exclude-pattern>/tests/*</exclude-pattern>
+	</rule>
+	<rule ref="WordPress.Files.FileName">
+		<exclude-pattern>/tests/cases/*</exclude-pattern>
+	</rule>
+	<rule ref="WordPress.Security.EscapeOutput">
+		<exclude-pattern>/tests/bootstrap\.php$</exclude-pattern>
+	</rule>
+
+</ruleset>

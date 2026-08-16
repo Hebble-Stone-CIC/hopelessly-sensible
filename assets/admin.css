@@ -1,0 +1,238 @@
+/*
+ * Hopelessly Sensible: the settings screen.
+ *
+ * The only asset this plugin loads, on one screen, and there is no JavaScript
+ * anywhere to go with it. The toggle below is an ordinary checkbox: everything
+ * that makes it look like a switch is here, so it keeps a checkbox's keyboard
+ * behaviour and announces its own state without being told to.
+ *
+ * Colours are WordPress's own. The accent is var(--wp-admin-theme-color), which
+ * follows whatever colour scheme the person reading it picked, with core's
+ * default blue behind it for anywhere that variable is not set. The private
+ * --wp-components-* aliases are deliberately not used.
+ */
+
+.hopsen-form {
+	max-width: 46rem;
+}
+
+.hopsen-notice {
+	max-width: 46rem;
+	margin: 1rem 0;
+	padding: 0.25rem 0.75rem;
+}
+
+.hopsen-notice__title {
+	margin: 0.75rem 0 0.25rem;
+	font-size: 1rem;
+	line-height: 1.4;
+}
+
+.hopsen-section {
+	margin: 2.5rem 0 0;
+}
+
+.hopsen-section__heading {
+	margin: 0;
+	padding: 0 0 0.5rem;
+	font-size: 1.125rem;
+	line-height: 1.4;
+	color: #1d2327;
+}
+
+.hopsen-section__note {
+	margin: 0 0 0.5rem;
+	max-width: 40rem;
+	color: #3c434a;
+}
+
+.hopsen-row {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 0 1rem;
+	padding: 1.25rem 0;
+	border-top: 1px solid #dcdcde;
+}
+
+/*
+ * A blocked row is still a row. The label and the line saying what is stopping
+ * it stay fully legible, because that sentence is the entire point of drawing
+ * the row at all. The signal that it cannot be moved lives on the switch, in
+ * the toggle rules further down.
+ */
+.hopsen-row--blocked .hopsen-row__label {
+	cursor: default;
+}
+
+.hopsen-row__body {
+	min-width: 0;
+}
+
+.hopsen-row__label {
+	display: block;
+	font-size: 1rem;
+	font-weight: 600;
+	line-height: 1.5;
+	color: #1d2327;
+	cursor: pointer;
+}
+
+.hopsen-row__description {
+	margin: 0.35rem 0 0;
+	max-width: 40rem;
+	color: #3c434a;
+}
+
+.hopsen-row__state {
+	margin: 0.5rem 0 0;
+	max-width: 40rem;
+	color: #50575e;
+	font-style: italic;
+}
+
+.hopsen-row__warning {
+	margin: 0.75rem 0 0;
+	max-width: 40rem;
+}
+
+.hopsen-row__warning > summary {
+	display: inline-block;
+	padding: 0.15rem 0;
+	color: var(--wp-admin-theme-color, #2271b1);
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.hopsen-row__warning > summary:focus-visible {
+	outline: 2px solid var(--wp-admin-theme-color, #2271b1);
+	outline-offset: 2px;
+}
+
+.hopsen-row__warning > p {
+	margin: 0.35rem 0 0;
+	padding: 0.6rem 0.85rem;
+	background: #f6f7f7;
+	border-left: 4px solid #dcdcde;
+	color: #3c434a;
+}
+
+/*
+ * The toggle.
+ *
+ * Core styles input[type="checkbox"] fairly thoroughly, including a dashicon
+ * tick through ::before when it is checked, so most of what follows is undoing
+ * that before drawing the switch.
+ *
+ * Every selector below repeats the attribute as well as the class, which looks
+ * redundant and is not. An attribute selector counts the same as a class, so
+ * core's input[type="checkbox"] scores 0,1,1 and beats a plain .hopsen-toggle
+ * at 0,1,0: the switch came out as a 16 pixel square with core's tick in it.
+ * Repeating the attribute puts these at 0,2,1, ahead of core without resorting
+ * to !important, which would take the rules out of reach of anyone theming
+ * their own dashboard later.
+ */
+
+input[type="checkbox"].hopsen-toggle {
+	appearance: none;
+	-webkit-appearance: none;
+	position: relative;
+	flex: none;
+	width: 2.5rem;
+	height: 1.4rem;
+	margin: 0.2rem 0 0;
+	padding: 0;
+	border: none;
+	border-radius: 0.7rem;
+	background: #8c8f94;
+	box-shadow: none;
+	cursor: pointer;
+	transition: background-color 0.15s ease-in-out;
+}
+
+input[type="checkbox"].hopsen-toggle::before,
+input[type="checkbox"].hopsen-toggle:checked::before {
+	content: "";
+	position: absolute;
+	top: 0.2rem;
+	left: 0.2rem;
+	width: 1rem;
+	height: 1rem;
+	margin: 0;
+	border-radius: 50%;
+	background: #fff;
+	transition: transform 0.15s ease-in-out;
+}
+
+input[type="checkbox"].hopsen-toggle:checked {
+	background: var(--wp-admin-theme-color, #2271b1);
+	border: none;
+	box-shadow: none;
+}
+
+input[type="checkbox"].hopsen-toggle:checked::before {
+	transform: translateX(1.1rem);
+}
+
+input[type="checkbox"].hopsen-toggle:focus,
+input[type="checkbox"].hopsen-toggle:focus-visible {
+	border: none;
+	box-shadow: none;
+	outline: 2px solid var(--wp-admin-theme-color, #2271b1);
+	outline-offset: 2px;
+}
+
+/*
+ * A blocked switch, in a dull red rather than a paler grey.
+ *
+ * Greying it out was the obvious thing and it failed on the screen: the off
+ * state is already a pale grey, so a paler one reads as nothing at all, and a
+ * blocked row looked exactly like a row somebody had simply left off. The point
+ * of drawing the row at all is to say it cannot be moved, and it has to say that
+ * before the click rather than after it.
+ *
+ * Muted rather than an alarm colour. A blocker is frequently something the site
+ * owner did on purpose, so this is not an error state, and the copy underneath
+ * says so in plain words.
+ *
+ * Hung on :disabled rather than on the row class, which loses the specificity
+ * argument against the base rule above. See the note on that at the top of this
+ * section.
+ */
+input[type="checkbox"].hopsen-toggle:disabled {
+	background: #c9837d;
+	cursor: not-allowed;
+}
+
+input[type="checkbox"].hopsen-toggle:disabled::before {
+	background: #fdf7f6;
+}
+
+@media ( prefers-reduced-motion: reduce ) {
+
+	input[type="checkbox"].hopsen-toggle,
+	input[type="checkbox"].hopsen-toggle::before,
+	input[type="checkbox"].hopsen-toggle:checked::before {
+		transition: none;
+	}
+}
+
+@media screen and ( max-width: 782px ) {
+
+	input[type="checkbox"].hopsen-toggle {
+		width: 3rem;
+		height: 1.7rem;
+		border-radius: 0.85rem;
+	}
+
+	input[type="checkbox"].hopsen-toggle::before,
+	input[type="checkbox"].hopsen-toggle:checked::before {
+		top: 0.25rem;
+		left: 0.25rem;
+		width: 1.2rem;
+		height: 1.2rem;
+	}
+
+	input[type="checkbox"].hopsen-toggle:checked::before {
+		transform: translateX(1.3rem);
+	}
+}

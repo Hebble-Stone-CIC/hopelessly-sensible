@@ -1,0 +1,24 @@
+# Dev tooling. Never shipped in the plugin zip.
+/vendor/
+/node_modules/
+composer.lock
+
+# Local phpcs overrides. The committed config is .phpcs.xml.dist
+/phpcs.xml
+/.phpcs.xml
+
+# Local phpunit overrides and its cache. The committed config is phpunit.xml.dist
+/phpunit.xml
+.phpunit.result.cache
+
+# This machine's paths for the test suite. Copy the .example and edit it.
+/tests/wp-tests-config-local.php
+
+# Editor and OS noise
+/.idea/
+/.vscode/
+.DS_Store
+*.swp
+
+# The zip, built by `composer build`
+/build/

@@ -1,0 +1,60 @@
+# Everything TRACKED that must never reach the plugin zip.
+#
+# Read by `composer build`, and by `wp dist-archive` if you would rather use
+# that. Both take the same format: one pattern per line, # for a comment.
+#
+# The rule this file exists to enforce is that the zip contains what a site
+# needs to run the plugin and nothing else. Development tooling, the test
+# suite, the contributor notes and the whole of git are none of a site's
+# business, and shipping them is the difference between a plugin that passes
+# Plugin Check and one that does not.
+#
+# It only ever has to name files that are committed. `composer build` exports
+# from `git archive HEAD` rather than copying the working directory, so nothing
+# untracked can reach the zip whether or not it is listed here. That matters
+# more than it sounds: a scratch script, a database dump or a stray .env sitting
+# in the working directory would otherwise be uploaded to wordpress.org because
+# nobody thought to add a line for it. Absence of a line is now safe by default
+# rather than dangerous by default.
+
+# Where the build puts itself. Excluding it is what stops the copy recursing.
+/build/
+
+# Version control
+.git
+.gitignore
+.gitattributes
+.github/
+
+# Dev tooling. Composer is require-dev only and vendor/ is never shipped.
+/vendor/
+/node_modules/
+composer.json
+composer.lock
+.phpcs.xml.dist
+phpcs.xml
+.phpcs.xml
+phpunit.xml.dist
+phpunit.xml
+.phpunit.result.cache
+
+# The test suite
+/tests/
+
+# Notes for whoever works on this, not for whoever runs it.
+README.md
+CONTRIBUTING.md
+/refs/
+/docs/
+.distignore
+.editorconfig
+
+# Editor and OS noise
+/.idea/
+/.vscode/
+.DS_Store
+*.swp
+Thumbs.db
+
+# wordpress.org page assets. They belong in SVN assets/, not in the zip.
+/.wporg-assets/
