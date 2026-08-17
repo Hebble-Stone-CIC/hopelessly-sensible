@@ -20,8 +20,12 @@ This plugin doesn't try to do everything. It just helps lock some of those most 
 
 ### It sets up what is safe, and leaves the rest to you
 
-On activation it looks at your site and switches on the features it is safe to. One
-writer? It hides author pages. Nobody has approved a comment in a year? It closes comments. 
+On activation it looks at your site and switches on the features it is safe to. 
+
+One
+writer? It hides author pages.
+
+Nobody has approved a comment in a year? It closes comments. 
 
 Three of the seven features are never switched on automatically, because they take something away from you that you might 
 not want to give up. That's your call and the screen helps you make the choice that's right for your site.
@@ -30,7 +34,9 @@ not want to give up. That's your call and the screen helps you make the choice t
 
 If something on your site changes that leaves a setting unable to work, or that might break your
 site, the switch goes off by itself and every administrator is told once,
-visibly, what changed and why. Install a plugin that needs remote publishing?
+visibly, what changed and why. 
+
+Install a plugin that needs remote publishing?
 "Block remote publishing" switches itself off. 
 
 
