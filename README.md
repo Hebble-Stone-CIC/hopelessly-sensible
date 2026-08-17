@@ -13,16 +13,16 @@ might go wrong so you can make the decision yourself, without needing to be a se
 
 Most security plugins give you thousands of options, many of which are of questionable value. 
 Most website security problems, though, aren't sophisticated attacks by criminals trying to steal your secrets. They're 
-bots and spambots trying the same open doors over and over until it's no longer worth bothering. 
-You see it in the spam comments, the "sure, I'll tell you who all my users are" login screen, and the other wide-open 
-user-enumeration routes that WordPress happily provides. The boring stuff. 
-This plugin doesn't try to do everything. It just helps close some of those boring doors.
+bots and spambots trying the same doors over and over until they find one which has been left unlocked. 
+The bots are looking for the most common, easiest ways in. That might be posting spam comments, guessing common usernames on your login screen (which, by default, WordPress helpfully tells them if they're right or wrong), or other hidden doors that WordPress leaves open by default. 
+This plugin doesn't try to do everything. It just helps lock some of those most 'at-risk' doors, making your site too much hassle for bots to bother with.
 
 
 ### It sets up what is safe, and leaves the rest to you
 
-On activation it looks at your site and switches on what is safe here. One
-writer, and it hides author pages. Nobody has approved a comment in a year: it closes comments. 
+On activation it looks at your site and switches on the features it is safe to. One
+writer? It hides author pages. Nobody has approved a comment in a year? It closes comments. 
+
 Three of the seven features are never switched on automatically, because they take something away from you that you might 
 not want to give up. That's your call and the screen helps you make the choice that's right for your site.
 
@@ -30,7 +30,7 @@ not want to give up. That's your call and the screen helps you make the choice t
 
 If something on your site changes that leaves a setting unable to work, or that might break your
 site, the switch goes off by itself and every administrator is told once,
-visibly, what changed and why. Install a plugin that needs remote publishing and
+visibly, what changed and why. Install a plugin that needs remote publishing?
 "Block remote publishing" switches itself off. 
 
 
