@@ -324,6 +324,182 @@ every other plugin's `init` callbacks.
 
 ---
 
+## GeneratePress
+
+### A locked file editor stops GeneratePress running PHP in its elements
+
+GP Premium's Elements module lets a Hook Element carry PHP behind an "Execute
+PHP" checkbox. `elements/class-elements-helper.php:112`:
+
+```php
+public static function should_execute_php() {
+	$php = true;
+
+	if ( defined( 'DISALLOW_FILE_EDIT' ) && true === DISALLOW_FILE_EDIT ) {
+		$php = false;
+	}
+
+	return apply_filters( 'generate_hooks_execute_php', $php );
+}
+```
+
+Tom, GeneratePress: *"Allowing file editing in your Dashboard is the same thing
+as allowing the Hook Element to execute PHP, which is why the disallow file
+editing constant applies to the Hook Element."* So "Lock the file editor" and
+"run PHP in a hook element" are one setting on a GeneratePress site, and we do
+not get to have the first without taking the second.
+
+Note `true ===`, not `defined()`. The forums are full of advice written before
+GP changelog 2.x, *"Fix: Check if `DISALLOW_FILE_EDIT` is set to true for PHP
+Elements"*, and that advice is now wrong: a `wp-config.php` defining the
+constant **false** leaves GeneratePress working normally. Our `blocked_forced`
+row therefore has no GeneratePress problem to report.
+
+### What it does instead is print the element's source into the page
+
+Not an error, and not nothing. `elements/class-hooks.php:213`:
+
+```php
+if ( $this->php && GeneratePress_Elements_Helper::should_execute_php() ) {
+	ob_start();
+	eval( '?>' . $content . '<?php ' );
+	echo ob_get_clean();
+} else {
+	echo $content;
+}
+```
+
+The `else` echoes the element's raw PHP into the response. Measured on a test
+site, a `wp_head` element became this, inside `<head>`:
+
+```html
+<meta name="generator" content="WordPress 7.1" />
+<?php
+
+echo _("This is a what a php-enabled hook looks like inside generatepress elements");
+
+?></head>
+```
+
+A browser hides `<?php …>` as a bogus comment, so the page looks merely broken
+rather than alarming, and the source is in the markup of every page the element
+runs on. Whatever the element held (an API key, a query, a token) is now
+served to anyone who reads the page source. This is the reason the file editor
+row treats a PHP element as a blocker rather than as a warning: a warning is a
+thing somebody reads and accepts, and there is no informed way to accept this.
+
+The `Unable to execute PHP as DISALLOW_FILE_EDIT is defined.` string the forums
+quote is `elements/class-metabox.php:415`, and it appears only in the editor,
+never on the front end.
+
+### Saving the element while the editor is locked deletes the flag for good
+
+`elements/class-metabox.php:411` hides the checkbox entirely when
+`should_execute_php()` is false, and the save routine at `:1738` reads the
+absent field as a deletion:
+
+```php
+if ( $value ) {
+	update_post_meta( $post_id, $key, $value );
+} else {
+	delete_post_meta( $post_id, $key );
+}
+```
+
+So on a site where our switch is on, opening a hook element and saving it drops
+`_generate_hook_execute_php`. Unlocking the editor afterwards does not bring it
+back, because there is nothing left to bring back. A one-way door reached by an
+ordinary edit, which is the second reason this is a blocker.
+
+### The question to ask is the filter, not the plugin name
+
+`should_execute_php()` ends in `apply_filters( 'generate_hooks_execute_php', $php )`
+and GeneratePress hooks nothing onto it itself, so `has_filter()` on that name
+answers "has this site taken the decision away from the constant". A site
+running `add_filter( 'generate_hooks_execute_php', '__return_true' )` keeps its
+elements working whatever we do, and has nothing to be blocked about. Same
+shape as the `xmlrpc_methods` test above, and for the same reason.
+
+`GENERATE_HOOKS_DISALLOW_PHP` is the older Hooks module's constant, not this
+one, and does not apply to Elements.
+
+### The filter has to be asked twice, and the count only once
+
+The file editor blocker is called at `init` priority zero, where `Plugin::boot()`
+decides which features start, and again at `wp_loaded`, where `Plugin::retreat()`
+decides whether a switch moves. Both matter and they are not the same question.
+
+`boot()` has to consult it. If it did not, the constant would be defined at
+`init`, GeneratePress would leak the element's source for that one page load,
+and the retreat at `wp_loaded` would only tidy up afterwards. One page load of
+source disclosure is not an acceptable price for a tidier call graph.
+
+But at `init` priority zero a child theme's `functions.php` has run and a
+snippets plugin has run, while anything hooked from `init` itself has not. So
+`has_filter( 'generate_hooks_execute_php' )` can answer no at `boot()` and yes at
+`retreat()`, and the second answer is the true one, for the same reason the XML-RPC
+question is settled at `wp_loaded` and never at `plugins_loaded`.
+
+This is why only the query is remembered between the two calls, and never the
+answer. Caching the whole answer cost a wrong retreat: a site carrying
+`add_filter( 'generate_hooks_execute_php', '__return_true' )` had its count taken
+before the filter existed, and the remembered count then outranked the filter at
+`wp_loaded`, so the plugin switched off a file editor lock that nothing was
+stopping and told every administrator it had. `class_exists()` and `has_filter()`
+are asked on every call; only `get_posts()` is spared the second run, because
+what the database holds cannot change midway through a request.
+
+### `class_exists( 'GeneratePress_Elements_Helper' )` is the presence test
+
+`gp-premium.php:72` requires `elements/elements.php` at file scope, guarded by
+`generatepress_is_module_active( 'generate_package_elements', … )`. So the class
+is declared before `plugins_loaded`, and its absence covers both "GP Premium is
+not here" and "Elements is switched off in the GP dashboard": the two cases
+where there is nothing to break. Cheaper than an option read, and correct
+earlier.
+
+### What an element with PHP looks like in the database
+
+Confirmed against a live element rather than read off the source:
+
+| | |
+|---|---|
+| post type | `gp_elements` |
+| post status | `publish` (a draft runs nowhere) |
+| `_generate_element_type` | `hook` |
+| `_generate_hook_execute_php` | the string `true` |
+| `_generate_hook` | the hook it fires on, e.g. `wp_head` |
+
+The other three element types (`header`, `layout`, `block`) carry no PHP and
+are not counted.
+
+### What this was read against, and why that is worth recording
+
+GP Premium 2.5.6. Everything above is internals rather than a published API: a
+class name, a post type and two meta keys. Only `generate_hooks_execute_php` is
+a contract GeneratePress offers anybody, being its own escape hatch.
+
+The behaviour has already moved once. The changelog entry *"Fix: Check if
+`DISALLOW_FILE_EDIT` is set to true for PHP Elements"* is the change from
+`defined()` to `true ===`, and it is why advice written before it is now wrong in
+the direction that matters. Assume this section describes 2.5.6 and re-read it
+against the installed copy before trusting it on a much later one.
+
+### A green test suite says nothing about whether this still matches GeneratePress
+
+`tests/stubs/class-generatepress-elements-helper.php` stands in for the real
+class, so the suite exercises our logic and never GP's. Rename the class or
+either meta key upstream and `Detection::gp_php_elements()` answers zero, the
+blocker clears, and the file editor locks on a site that has PHP elements: the
+exact source disclosure the blocker exists to prevent. Silent, and in the
+dangerous direction, with every test still passing.
+
+There is no other question to ask, so the dependency stands. What covers it is
+the sentence in the file editor's warning about code snippets plugins, which
+says the useful thing whether or not detection is still working.
+
+---
+
 ## Queries
 
 ### `has_published_posts` is not `count_users()`

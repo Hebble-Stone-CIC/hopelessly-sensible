@@ -194,7 +194,8 @@ their own.
 > everyone, including you. If you or whoever looks after your site makes small
 > fixes that way, they will need to edit files over SFTP or through your hosting
 > control panel instead. Switching this back on brings the editors back on the
-> next page load.
+> next page load. Some code snippets plugins stop running their code when the
+> file editor is locked, so if you use one, check it still works.
 
 **State line, off:** none.
 
@@ -204,6 +205,33 @@ locks the file editor, so this switch has nothing left to do.
 **State line, blocked, editor forced open:** Your `wp-config.php` sets
 `DISALLOW_FILE_EDIT` to false, and that beats anything we do. The file editor
 stays available until somebody changes or removes that line.
+
+**State line, blocked, one GeneratePress element runs PHP:** One GeneratePress
+element here runs PHP, and GeneratePress will not do that while the file editor
+is locked. If that code no longer needs to live in an element, moving it to your
+child theme frees this switch up.
+
+**State line, blocked, several GeneratePress elements run PHP:** `{elements}`
+GeneratePress elements here run PHP, and GeneratePress will not do that while
+the file editor is locked. If that code no longer needs to live in an element,
+moving it to your child theme frees this switch up.
+
+The second sentence is conditional and stays conditional. A blocker is a fact
+about the site and frequently something the owner did on purpose, so it is
+reported and never set as homework.
+
+> **Why this is a blocker and not a warning.** A warning is something a person
+> reads and accepts. There is no informed way to accept this one: GeneratePress
+> does not fail loudly when it stops running an element, it echoes the element's
+> PHP source into the page instead, on every page that element runs on. And
+> opening that element and saving it while the editor is locked deletes the
+> "Execute PHP" setting for good, because GeneratePress hides the checkbox and
+> reads its absence as off. Neither is a consequence somebody chose. See
+> `refs/gotchas.md`, "GeneratePress".
+>
+> Only elements that are published, of type hook, and set to execute PHP count.
+> A site that has hooked `generate_hooks_execute_php` has taken the decision away
+> from the constant and is never blocked.
 
 ---
 
@@ -233,6 +261,29 @@ nothing left to act on and we switched it off.
 
 **File editor:** Your `wp-config.php` set `DISALLOW_FILE_EDIT` to false, which
 beats anything we do, so we switched "Lock the file editor" off.
+
+### A GeneratePress element started running PHP
+
+> A GeneratePress element on your site started running PHP, and "Lock the file
+> editor" would have stopped GeneratePress running it, so we switched that
+> setting off.
+
+Plural, where more than one element was found: GeneratePress elements on your
+site started running PHP, and "Lock the file editor" would have stopped
+GeneratePress running them, so we switched that setting off.
+
+### When the cause was not recorded
+
+> Something on your site meant the file editor could not be locked, so we
+> switched "Lock the file editor" off.
+
+**A feature that can be switched off for more than one reason keeps the reason.**
+The banner reports an event, so it may not go and ask the site what is wrong
+now: the answer would be a different sentence a day later, or no sentence at
+all. The blocker variant is recorded at the moment the switch moves, and the
+sentence is chosen from it. The line above is what stands for a record written
+by a version that did not keep causes, and it is worded to be true whichever
+cause it turns out to have been.
 
 **Closing line:** You can switch these back on under Settings, Hopelessly
 Sensible, and that screen will tell you if anything is still in the way.

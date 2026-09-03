@@ -136,7 +136,7 @@ class Test_Settings extends WP_UnitTestCase {
 	 */
 	public function test_the_option_keeps_no_record_of_the_past() {
 		$this->assertSame( array( 'schema', 'features', 'live' ), array_keys( Settings::defaults() ) );
-		$this->assertSame( array( 'switched_off', 'dismissed' ), array_keys( Settings::normalise_live( array() ) ) );
+		$this->assertSame( array( 'switched_off', 'switched_off_by', 'dismissed' ), array_keys( Settings::normalise_live( array() ) ) );
 	}
 
 	/**
@@ -265,7 +265,7 @@ class Test_Settings extends WP_UnitTestCase {
 
 		$live = get_option( HOPSEN_OPTION )['live'];
 
-		$this->assertSame( array( 'switched_off', 'dismissed' ), array_keys( $live ) );
+		$this->assertSame( array( 'switched_off', 'switched_off_by', 'dismissed' ), array_keys( $live ) );
 		$this->assertArrayNotHasKey( 'xmlrpc_in_use', $live );
 	}
 

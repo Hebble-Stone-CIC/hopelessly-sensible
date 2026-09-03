@@ -62,14 +62,15 @@ function hopsen_load_plugin_for_tests() {
 tests_add_filter( 'muplugins_loaded', 'hopsen_load_plugin_for_tests' );
 
 /**
- * Declares the WooCommerce stub once WordPress is loaded.
+ * Declares the stubs standing in for other people's plugins.
  *
  * @return void
  */
-function hopsen_load_woocommerce_stub() {
+function hopsen_load_plugin_stubs() {
 	require_once __DIR__ . '/stubs/class-woocommerce.php';
+	require_once __DIR__ . '/stubs/class-generatepress-elements-helper.php';
 }
 
-tests_add_filter( 'muplugins_loaded', 'hopsen_load_woocommerce_stub' );
+tests_add_filter( 'muplugins_loaded', 'hopsen_load_plugin_stubs' );
 
 require $hopsen_tests_dir . '/includes/bootstrap.php';

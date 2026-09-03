@@ -62,7 +62,7 @@ class Plugin {
 				continue;
 			}
 
-			Settings::switch_off( $key );
+			Settings::switch_off( $key, $blocker['variant'] );
 		}
 	}
 

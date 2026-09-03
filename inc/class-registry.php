@@ -47,7 +47,10 @@ class Registry {
 	 *                feature with nothing to report renders no line at all.
 	 * - retreat_line What the banner says when this feature has been switched off
 	 *                on the owner's behalf. The one string here in the past tense:
-	 *                the banner outlives the situation that caused it.
+	 *                the banner outlives the situation that caused it. A feature
+	 *                that can be switched off for more than one reason writes an
+	 *                array keyed by blocker variant instead, with a 'default' for
+	 *                a record written before the cause was kept.
 	 *
 	 * State lines name any number they quote as a {token}, filled in by
 	 * Settings::fill_counts(). Not printf, because a translator who mangles a %d
@@ -164,7 +167,7 @@ class Registry {
 			'disallow_file_edit'  => array(
 				'label'        => __( 'Lock the file editor', 'hopelessly-sensible' ),
 				'description'  => __( 'WordPress lets administrators edit theme and plugin files straight from the dashboard. It is a quick way to take a site down by accident, and if someone gets into an administrator account it is a quick way for them to run code of their own.', 'hopelessly-sensible' ),
-				'warning'      => __( 'This takes the theme and plugin file editors out of the dashboard for everyone, including you. If you or whoever looks after your site makes small fixes that way, they will need to edit files over SFTP or through your hosting control panel instead. Switching this back on brings the editors back on the next page load.', 'hopelessly-sensible' ),
+				'warning'      => __( 'This takes the theme and plugin file editors out of the dashboard for everyone, including you. If you or whoever looks after your site makes small fixes that way, they will need to edit files over SFTP or through your hosting control panel instead. Switching this back on brings the editors back on the next page load. Some code snippets plugins stop running their code when the file editor is locked, so if you use one, check it still works.', 'hopelessly-sensible' ),
 				'warning_open' => true,
 				'group'        => 'optional',
 				'default'      => false,
@@ -172,10 +175,18 @@ class Registry {
 				'blocker'      => array( Detection::class, 'file_edit_blocker' ),
 				'callback'     => array( Features\File_Edit::class, 'init' ),
 				'state_line'   => array(
-					'blocked_locked' => __( 'Your wp-config.php already locks the file editor, so this switch has nothing left to do.', 'hopelessly-sensible' ),
-					'blocked_forced' => __( 'Your wp-config.php sets DISALLOW_FILE_EDIT to false, and that beats anything we do. The file editor stays available until somebody changes or removes that line.', 'hopelessly-sensible' ),
+					'blocked_locked'  => __( 'Your wp-config.php already locks the file editor, so this switch has nothing left to do.', 'hopelessly-sensible' ),
+					'blocked_forced'  => __( 'Your wp-config.php sets DISALLOW_FILE_EDIT to false, and that beats anything we do. The file editor stays available until somebody changes or removes that line.', 'hopelessly-sensible' ),
+					'blocked_gp_one'  => __( 'One GeneratePress element here runs PHP, and GeneratePress will not do that while the file editor is locked. If that code no longer needs to live in an element, moving it to your child theme frees this switch up.', 'hopelessly-sensible' ),
+					/* translators: {elements} is replaced with the number of GeneratePress elements set to run PHP. Keep the braces. */
+					'blocked_gp_many' => __( '{elements} GeneratePress elements here run PHP, and GeneratePress will not do that while the file editor is locked. If that code no longer needs to live in an element, moving it to your child theme frees this switch up.', 'hopelessly-sensible' ),
 				),
-				'retreat_line' => __( 'Your wp-config.php set DISALLOW_FILE_EDIT to false, which beats anything we do, so we switched "Lock the file editor" off.', 'hopelessly-sensible' ),
+				'retreat_line' => array(
+					'blocked_forced'  => __( 'Your wp-config.php set DISALLOW_FILE_EDIT to false, which beats anything we do, so we switched "Lock the file editor" off.', 'hopelessly-sensible' ),
+					'blocked_gp_one'  => __( 'A GeneratePress element on your site started running PHP, and "Lock the file editor" would have stopped GeneratePress running it, so we switched that setting off.', 'hopelessly-sensible' ),
+					'blocked_gp_many' => __( 'GeneratePress elements on your site started running PHP, and "Lock the file editor" would have stopped GeneratePress running them, so we switched that setting off.', 'hopelessly-sensible' ),
+					'default'         => __( 'Something on your site meant the file editor could not be locked, so we switched "Lock the file editor" off.', 'hopelessly-sensible' ),
+				),
 			),
 		);
 
@@ -238,6 +249,47 @@ class Registry {
 			'retreat' => ! empty( $blocker['retreat'] ),
 			'checked' => isset( $blocker['checked'] ) ? (bool) $blocker['checked'] : null,
 		);
+	}
+
+	/**
+	 * The sentence the banner owes for one retreat.
+	 *
+	 * A feature with one way of being switched off writes a string and it is used
+	 * as written. A feature with more than one writes an array keyed by the blocker
+	 * variant that caused it, and the cause recorded when the switch moved picks
+	 * between them.
+	 *
+	 * The cause is passed in rather than asked for again, because the banner
+	 * reports an event: asking the site now would answer about the site now, which
+	 * is a different sentence a day later and no sentence at all once the situation
+	 * has cleared. A record carrying no cause, which is what an upgrade from an
+	 * earlier version leaves behind, or one naming a variant a later version has
+	 * dropped, falls back to that feature's default sentence.
+	 *
+	 * @param array<string, mixed> $feature A registry entry.
+	 * @param string               $cause   The blocker variant recorded, if any.
+	 * @return string The sentence, or an empty string where there is none.
+	 */
+	public static function retreat_line( array $feature, $cause = '' ) {
+		if ( empty( $feature['retreat_line'] ) ) {
+			return '';
+		}
+
+		$line = $feature['retreat_line'];
+
+		if ( is_string( $line ) ) {
+			return $line;
+		}
+
+		if ( ! is_array( $line ) ) {
+			return '';
+		}
+
+		if ( is_string( $cause ) && '' !== $cause && isset( $line[ $cause ] ) ) {
+			return (string) $line[ $cause ];
+		}
+
+		return isset( $line['default'] ) ? (string) $line['default'] : '';
 	}
 
 	/**
