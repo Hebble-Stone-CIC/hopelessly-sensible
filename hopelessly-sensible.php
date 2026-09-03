@@ -3,7 +3,7 @@
  * Plugin Name:       Hopelessly Sensible: Simple Security Hardening
  * Plugin URI:        https://github.com/Hebble-Stone-CIC/hopelessly-sensible
  * Description:       Security hardening for people who have better things to do.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Requires at least: 6.5
  * Requires PHP:      7.4
  * Author:            Hebble & Stone
@@ -31,7 +31,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin version. Also used to bust the admin stylesheet cache.
  */
-define( 'HOPSEN_VERSION', '1.0.0' );
+define( 'HOPSEN_VERSION', '1.1.0' );
 
 /**
  * Absolute path to the main plugin file.
