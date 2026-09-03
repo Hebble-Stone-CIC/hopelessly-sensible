@@ -7,8 +7,19 @@
  *
  * Every key here can equally be set as an environment variable, which is what
  * continuous integration should do. The variable name is the key in upper case
- * with a HOPSEN_ prefix: wp_root becomes HOPSEN_WP_ROOT, and so on. This file
- * wins where both are set.
+ * with a HOPSEN_ prefix: wp_root becomes HOPSEN_WP_ROOT, and so on. The
+ * environment wins where both are set, so this file holds your everyday setup
+ * and a variable on the command line points a single run somewhere else.
+ *
+ * Running against the oldest WordPress the plugin supports takes three of them,
+ * because the wp-phpunit library composer installs here tracks the newest
+ * WordPress and has to match the one under test. Install the matching line
+ * somewhere outside this repo, with
+ * `composer require --working-dir=/path/to/wp-phpunit-6.5 "wp-phpunit/wp-phpunit:6.5.*"`,
+ * and point WP_TESTS_DIR at it:
+ *
+ *     WP_TESTS_DIR=/path/to/wp-phpunit-6.5/vendor/wp-phpunit/wp-phpunit \
+ *     HOPSEN_WP_ROOT=/path/to/wordpress-6.5 HOPSEN_THEME=twentytwentyfour composer test
  *
  * Only the first two usually need changing.
  *

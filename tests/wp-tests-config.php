@@ -8,13 +8,17 @@
  * and a MySQL server to install a test database on. Neither has a default that
  * works on somebody else's machine, so both are configured per machine.
  *
- * There are two ways to do that, and the first one wins where both are present:
+ * There are two ways to do that:
  *
  * 1. Copy tests/wp-tests-config-local.php.example to
  *    tests/wp-tests-config-local.php and edit it. That copy is ignored by git,
  *    so your directory layout never reaches the repository.
  * 2. Set the HOPSEN_ environment variables listed in that example file, which
  *    is what continuous integration should do.
+ *
+ * The environment wins where both are present. The file is the setup you use
+ * every day, and a variable on the command line is how one run is pointed
+ * somewhere else, at an older WordPress for instance, without editing it.
  *
  * The test suite DROPS EVERY TABLE in the database it is pointed at, before
  * every run. That is what DB_NAME being its own database is for, and why
@@ -30,7 +34,7 @@ if ( is_readable( __DIR__ . '/wp-tests-config-local.php' ) ) {
 }
 
 /**
- * Reads one setting: the local file first, then the environment, then a fallback.
+ * Reads one setting: the environment first, then the local file, then a fallback.
  *
  * @param array<string, string> $local    Settings from the local config file.
  * @param string                $key      The setting name, without its prefix.
@@ -38,13 +42,17 @@ if ( is_readable( __DIR__ . '/wp-tests-config-local.php' ) ) {
  * @return string The configured value.
  */
 function hopsen_test_setting( array $local, $key, $fallback ) {
+	$value = getenv( 'HOPSEN_' . strtoupper( $key ) );
+
+	if ( false !== $value && '' !== $value ) {
+		return $value;
+	}
+
 	if ( isset( $local[ $key ] ) && '' !== $local[ $key ] ) {
 		return (string) $local[ $key ];
 	}
 
-	$value = getenv( 'HOPSEN_' . strtoupper( $key ) );
-
-	return ( false === $value || '' === $value ) ? $fallback : $value;
+	return $fallback;
 }
 
 $hopsen_wp_root = hopsen_test_setting( $hopsen_local, 'wp_root', dirname( __DIR__, 2 ) . '/wordpress' );
