@@ -429,21 +429,100 @@ class Detection {
 	}
 
 	/**
+	 * Callbacks WordPress hooks to xmlrpc_methods itself.
+	 *
+	 * Core registers these from default-filters.php on every site, so their
+	 * presence says nothing about whether anything here wants XML-RPC. Both
+	 * entries only ever remove a method from the table, never add one, which is
+	 * why ignoring them cannot hide a site that needs the endpoint.
+	 *
+	 * Naming them is not the plugin-name matching this class refuses elsewhere.
+	 * A plugin name is a guess about what some third party might do. These are
+	 * core's own registrations, read at the source and understood, and the list
+	 * is exhaustive for the versions named in refs/gotchas.md, "XML-RPC".
+	 *
+	 * @var string[]
+	 */
+	private static $core_xmlrpc_callbacks = array(
+		'wp_maybe_disable_xmlrpc_pingback_for_environment',
+	);
+
+	/**
 	 * Whether anything on this site is using XML-RPC.
 	 *
 	 * Asked of WordPress rather than of a list of plugin names. Core builds the
 	 * XML-RPC method table from everything hooked to xmlrpc_methods, so having
-	 * hooked it is what "needs XML-RPC" means. Names fail in both directions: see
-	 * refs/gotchas.md, "XML-RPC".
+	 * hooked it is what "needs XML-RPC" means, once core's own hooks are set
+	 * aside. Names fail in both directions: see refs/gotchas.md, "XML-RPC".
+	 *
+	 * WordPress 7.1 began hooking the filter itself, so "anything at all is
+	 * hooked" stopped being the question on that day and has_filter() alone now
+	 * answers yes on every site alive. What is asked instead is whether anything
+	 * other than core is hooked.
 	 *
 	 * @return bool True when something on this site extends XML-RPC.
 	 */
 	public static function xmlrpc_in_use() {
-		if ( false !== has_filter( 'xmlrpc_methods' ) ) {
+		if ( true === self::has_foreign_filter( 'xmlrpc_methods', self::$core_xmlrpc_callbacks ) ) {
 			return true;
 		}
 
 		return self::jetpack_connected();
+	}
+
+	/**
+	 * Whether a hook carries any callback that is not one of core's own.
+	 *
+	 * Walks the registered callbacks rather than asking has_filter(), which
+	 * cannot tell core's registrations from anybody else's.
+	 *
+	 * Matched on the callback name and never on where the function is defined.
+	 * Reflection would report the file a function was written in rather than who
+	 * hooked it, so a site whose own functions.php hooks a core helper, say
+	 * __return_empty_array, would be read as core and ignored. That site has made
+	 * a decision about XML-RPC and we would be overruling it silently.
+	 *
+	 * An unrecognised callback counts as somebody using the hook, which is the
+	 * direction that costs a switch rather than a site: a later WordPress adding
+	 * a second callback of its own leaves this feature blocked until the name is
+	 * added here, and nothing breaks in the meantime.
+	 *
+	 * @param string   $hook  The hook to inspect.
+	 * @param string[] $known Callback names that belong to core.
+	 * @return bool True when something other than core has hooked it.
+	 */
+	private static function has_foreign_filter( $hook, array $known ) {
+		if ( false === has_filter( $hook ) ) {
+			return false;
+		}
+
+		if ( ! isset( $GLOBALS['wp_filter'][ $hook ] ) ) {
+			return false;
+		}
+
+		$registered = $GLOBALS['wp_filter'][ $hook ];
+
+		if ( ! isset( $registered->callbacks ) || ! is_array( $registered->callbacks ) ) {
+			return true;
+		}
+
+		foreach ( $registered->callbacks as $callbacks ) {
+			foreach ( $callbacks as $callback ) {
+				if ( ! isset( $callback['function'] ) ) {
+					return true;
+				}
+
+				if ( ! is_string( $callback['function'] ) ) {
+					return true;
+				}
+
+				if ( ! in_array( $callback['function'], $known, true ) ) {
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	/**

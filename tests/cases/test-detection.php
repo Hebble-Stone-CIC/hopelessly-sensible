@@ -408,6 +408,79 @@ class Test_Detection extends WP_UnitTestCase {
 	}
 
 	/**
+	 * WordPress hooking its own filter is not a site using XML-RPC.
+	 *
+	 * WordPress 7.1 added this callback to default-filters.php, so from that
+	 * release has_filter() answers yes on every site alive and the old test
+	 * blocked the feature everywhere. The callback only ever unsets
+	 * pingback.ping, so it reduces the method table and can never be evidence
+	 * that something wants the endpoint.
+	 *
+	 * Registered here by name rather than skipped on old versions. add_filter()
+	 * stores whatever string it is given, so this reproduces 7.1 on a 6.8.3
+	 * codebase where the function does not exist.
+	 *
+	 * @return void
+	 */
+	public function test_core_hooking_the_filter_is_not_a_site_using_xmlrpc() {
+		add_filter( 'xmlrpc_methods', 'wp_maybe_disable_xmlrpc_pingback_for_environment' );
+
+		$this->assertFalse( Detection::xmlrpc_in_use() );
+		$this->assertNull( Detection::xmlrpc_blocker() );
+	}
+
+	/**
+	 * Core's callback alongside somebody else's is still somebody else's.
+	 *
+	 * The version that answered on has_filter() alone could not see past the
+	 * first registration. Order must not matter either, so core goes on first.
+	 *
+	 * @return void
+	 */
+	public function test_core_does_not_hide_a_real_user_of_xmlrpc() {
+		add_filter( 'xmlrpc_methods', 'wp_maybe_disable_xmlrpc_pingback_for_environment' );
+		add_filter( 'xmlrpc_methods', '__return_empty_array' );
+
+		$this->assertTrue( Detection::xmlrpc_in_use() );
+	}
+
+	/**
+	 * A core function is not core's hook, and the difference is the whole point.
+	 *
+	 * Deciding what belongs to core by asking where a function is defined would
+	 * read this as core, because __return_empty_array lives in wp-includes. It
+	 * is the site that hooked it, that site has taken a decision about XML-RPC,
+	 * and overruling it silently is exactly the failure this pins.
+	 *
+	 * @return void
+	 */
+	public function test_a_core_function_hooked_by_the_site_still_counts() {
+		add_filter( 'xmlrpc_methods', '__return_empty_array' );
+
+		$this->assertTrue( Detection::xmlrpc_in_use() );
+	}
+
+	/**
+	 * A closure counts, because nothing can prove it is core's.
+	 *
+	 * Core registers named functions. Anything this class cannot name is
+	 * somebody else's, and the unrecognised case has to cost a switch rather
+	 * than a site.
+	 *
+	 * @return void
+	 */
+	public function test_an_unnameable_callback_counts() {
+		add_filter(
+			'xmlrpc_methods',
+			function ( $methods ) {
+				return $methods;
+			}
+		);
+
+		$this->assertTrue( Detection::xmlrpc_in_use() );
+	}
+
+	/**
 	 * A site where nothing uses XML-RPC is free to block it.
 	 *
 	 * Including a site carrying the wreckage of a shop somebody removed years

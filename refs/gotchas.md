@@ -299,11 +299,64 @@ Measured on a live shop, WooCommerce 11.0.1:
 
 Name matching fails one way, library detection fails the other. The signal that
 tracks neither presence nor branding is core's own `xmlrpc_methods` filter:
-having hooked it is what extending XML-RPC means.
+having hooked it is what extending XML-RPC means, once WordPress's own hooks are
+set aside. See "WordPress 7.1 hooks the filter itself" below, which is the part
+of this that expired.
 `class-manager.php:143` registers it inside `if ( $manager->is_connected() )`,
 so the connection announces itself exactly when blocking it would hurt. It also
 gives the right answer for a site still carrying the options-table wreckage of a
 shop removed years ago, because abandoned rows hook nothing.
+
+### WordPress 7.1 hooks the filter itself, so `has_filter()` stopped answering
+
+`default-filters.php:433` in WordPress 7.1:
+
+```php
+add_filter( 'xmlrpc_methods', 'wp_maybe_disable_xmlrpc_pingback_for_environment' );
+```
+
+WordPress 6.8.3 has neither that line nor the function. From 7.1 onwards
+`has_filter( 'xmlrpc_methods' )` is therefore true on every site alive, which
+made "block remote publishing" permanently blocked and retreated the switch on
+any site that had it on.
+
+The callback is subtractive, `comment.php:3495`:
+
+```php
+function wp_maybe_disable_xmlrpc_pingback_for_environment( $methods ) {
+	if ( wp_should_disable_pings_for_environment() ) {
+		unset( $methods['pingback.ping'] );
+	}
+	return $methods;
+}
+```
+
+It only ever removes a method. So core hooking this filter is not weak evidence
+of XML-RPC use, it is WordPress reducing the XML-RPC surface, and reading it as
+use is backwards. The question was never "is anything hooked" but "is anything
+other than core hooked", and the two only stopped agreeing in 7.1.
+
+### Ask which callback, not which file it lives in
+
+The tempting fix is to ignore callbacks defined under `wp-includes/`, found by
+reflection. It is wrong, and the suite pins it.
+
+Reflection reports where a **function was written**, not who **hooked** it. A
+site whose own `functions.php` runs `add_filter( 'xmlrpc_methods',
+'__return_empty_array' )` registers a callback defined in
+`wp-includes/functions.php`, so a path test calls that core and ignores it. That
+site has taken a deliberate decision about XML-RPC and the path test overrules it
+without saying so. `test_a_core_function_hooked_by_the_site_still_counts` is
+that case.
+
+Matching the callback name instead is exact, needs no reflection, and fails in
+the safe direction. Anything unrecognised, a closure included, counts as
+somebody using the hook. A later WordPress adding a second callback of its own
+would leave the feature blocked until the name is added to
+`Detection::$core_xmlrpc_callbacks`, which costs a switch rather than a site.
+
+The list is exhaustive for WordPress 6.8.3 and 7.1. Re-read
+`default-filters.php` when a new major release lands.
 
 ### Jetpack has a second XML-RPC endpoint that is not xmlrpc.php
 
