@@ -3,10 +3,16 @@
 
 	<description>WordPress Coding Standards for the Hopelessly Sensible plugin.</description>
 
-	<!-- Scan everything in the plugin, excluding tooling and build output. -->
+	<!--
+		Scan everything in the plugin, excluding tooling and build output. The
+		build directory is a copy of the plugin as it stood when the zip was last
+		made, so linting it reports an old file at a new rule and looks like a
+		fault in the source.
+	-->
 	<file>.</file>
 	<exclude-pattern>/vendor/*</exclude-pattern>
 	<exclude-pattern>/node_modules/*</exclude-pattern>
+	<exclude-pattern>/build/*</exclude-pattern>
 
 	<!-- Show progress, show the sniff name on each error, use colour. -->
 	<arg value="ps"/>
@@ -78,17 +84,6 @@
 		callbacks throughout this plugin. Every hook callback is a named method.
 	-->
 	<rule ref="WordPress.WP.AlternativeFunctions"/>
-
-	<!--
-		The one unprefixed constant this plugin defines is DISALLOW_FILE_EDIT,
-		which belongs to core and is the documented way to take the theme and
-		plugin editors out of the dashboard. A prefixed name would define a
-		constant nothing reads. The exclusion is scoped to the single file that
-		does it, so anything else defining an unprefixed constant still fails.
-	-->
-	<rule ref="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound">
-		<exclude-pattern>/inc/features/class-file-edit\.php$</exclude-pattern>
-	</rule>
 
 	<!--
 		The test suite is held to the same style as the plugin, deliberately:

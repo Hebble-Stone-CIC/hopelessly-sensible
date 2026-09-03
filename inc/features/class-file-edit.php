@@ -74,6 +74,7 @@ class File_Edit {
 			return;
 		}
 
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- Core's own constant, and defining it is the feature. A prefixed name would define a constant nothing reads.
 		define( 'DISALLOW_FILE_EDIT', true );
 	}
 }
