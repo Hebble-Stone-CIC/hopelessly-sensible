@@ -54,16 +54,22 @@ class Settings {
 	 * Forces the live values into their declared shape.
 	 *
 	 * Nothing here records what the site used to look like, only what this plugin
-	 * has done to itself: switched_off names features we retreated from, and
-	 * dismissed the administrators who have seen the banner saying so. Per-user
-	 * state would normally be user meta, which would mean writing outside our own
-	 * option, so it is a list of IDs in here.
+	 * has done to itself: switched_off names features we retreated from,
+	 * switched_off_by why, and dismissed the administrators who have seen the
+	 * banner saying so. Per-user state would normally be user meta, which would
+	 * mean writing outside our own option, so it is a list of IDs in here.
+	 *
+	 * The cause is kept rather than asked for again at render time, because the
+	 * banner reports an event and has to go on describing that event correctly
+	 * after the situation behind it has changed. A record written before this
+	 * plugin kept causes carries none, and its feature's default sentence stands.
 	 *
 	 * @param array<string, mixed> $live Raw live values, from storage or a fresh look.
 	 * @return array<string, mixed> The live values, complete and correctly typed.
 	 */
 	public static function normalise_live( array $live ) {
 		$off       = isset( $live['switched_off'] ) && is_array( $live['switched_off'] ) ? $live['switched_off'] : array();
+		$causes    = isset( $live['switched_off_by'] ) && is_array( $live['switched_off_by'] ) ? $live['switched_off_by'] : array();
 		$dismissed = isset( $live['dismissed'] ) && is_array( $live['dismissed'] ) ? $live['dismissed'] : array();
 		$known     = Registry::all();
 
@@ -93,9 +99,26 @@ class Settings {
 			$clean_users[] = $user_id;
 		}
 
+		$clean_causes = array();
+
+		foreach ( $clean_off as $key ) {
+			if ( ! isset( $causes[ $key ] ) || ! is_string( $causes[ $key ] ) ) {
+				continue;
+			}
+
+			$cause = sanitize_key( $causes[ $key ] );
+
+			if ( '' === $cause ) {
+				continue;
+			}
+
+			$clean_causes[ $key ] = $cause;
+		}
+
 		return array(
-			'switched_off' => $clean_off,
-			'dismissed'    => $clean_users,
+			'switched_off'    => $clean_off,
+			'switched_off_by' => $clean_causes,
+			'dismissed'       => $clean_users,
 		);
 	}
 
@@ -197,10 +220,13 @@ class Settings {
 	 * ever goes in this direction. Dismissals are cleared at the same time,
 	 * because a fresh retreat is news again.
 	 *
-	 * @param string $key A feature key from the registry.
+	 * @param string $key   A feature key from the registry.
+	 * @param string $cause  The blocker variant that forced it, for the banner to
+	 *                       quote later. Empty where the caller does not know, which
+	 *                       leaves the feature's default sentence to stand.
 	 * @return void
 	 */
-	public static function switch_off( $key ) {
+	public static function switch_off( $key, $cause = '' ) {
 		$settings = self::get();
 
 		if ( ! array_key_exists( $key, $settings['features'] ) ) {
@@ -228,8 +254,15 @@ class Settings {
 			$off[] = $key;
 		}
 
-		$live['switched_off'] = $off;
-		$live['dismissed']    = array();
+		$causes = isset( $live['switched_off_by'] ) && is_array( $live['switched_off_by'] ) ? $live['switched_off_by'] : array();
+
+		if ( is_string( $cause ) && '' !== $cause ) {
+			$causes[ $key ] = $cause;
+		}
+
+		$live['switched_off']    = $off;
+		$live['switched_off_by'] = $causes;
+		$live['dismissed']       = array();
 
 		$stored['features'] = $features;
 		$stored['live']     = self::normalise_live( $live );
@@ -420,13 +453,19 @@ class Settings {
 					'type'                 => 'object',
 					'additionalProperties' => false,
 					'properties'           => array(
-						'switched_off' => array(
+						'switched_off'    => array(
 							'type'  => 'array',
 							'items' => array(
 								'type' => 'string',
 							),
 						),
-						'dismissed'    => array(
+						'switched_off_by' => array(
+							'type'                 => 'object',
+							'additionalProperties' => array(
+								'type' => 'string',
+							),
+						),
+						'dismissed'       => array(
 							'type'  => 'array',
 							'items' => array(
 								'type' => 'integer',

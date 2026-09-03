@@ -16,6 +16,7 @@ use HopelesslySensible\Detection;
 use HopelesslySensible\Features\File_Edit;
 use HopelesslySensible\Features\Xmlrpc;
 use HopelesslySensible\Plugin;
+use HopelesslySensible\Registry;
 use HopelesslySensible\Settings;
 
 /**
@@ -39,8 +40,66 @@ class Test_Xmlrpc_And_File_Edit extends WP_UnitTestCase {
 	public function tear_down() {
 		Settings::flush();
 		$this->set_config_defined( null );
+		$this->forget_elements();
 
 		parent::tear_down();
+	}
+
+	/**
+	 * Makes Detection ask about GeneratePress elements again.
+	 *
+	 * The count is the one answer that class remembers, because it is asked twice
+	 * on an ordinary request. A memory that outlived a test would carry one test's
+	 * elements into the next one, so it is cleared at both ends: on the way out so
+	 * nothing leaks, and on the way in so nothing arrives.
+	 *
+	 * @return void
+	 */
+	private function forget_elements() {
+		$property = new ReflectionProperty( Detection::class, 'gp_php_elements' );
+		$property->setAccessible( true );
+		$property->setValue( null, null );
+	}
+
+	/**
+	 * Registers the post type GeneratePress keeps its elements in.
+	 *
+	 * The core test case unregisters it again afterwards.
+	 *
+	 * @return void
+	 */
+	private function register_elements() {
+		register_post_type( 'gp_elements', array( 'public' => false ) );
+	}
+
+	/**
+	 * Creates one published GeneratePress element.
+	 *
+	 * The three values are the ones the plugin queries on, taken from a real
+	 * element rather than from the source. See refs/gotchas.md, "GeneratePress".
+	 *
+	 * @param string $type   The element type. Only 'hook' can hold PHP.
+	 * @param bool   $php    Whether "Execute PHP" is ticked.
+	 * @param string $status The post status. Only 'publish' ever runs.
+	 * @return int The element's post id.
+	 */
+	private function element( $type = 'hook', $php = true, $status = 'publish' ) {
+		$id = self::factory()->post->create(
+			array(
+				'post_type'   => 'gp_elements',
+				'post_status' => $status,
+			)
+		);
+
+		update_post_meta( $id, '_generate_element_type', $type );
+
+		if ( true === $php ) {
+			update_post_meta( $id, '_generate_hook_execute_php', 'true' );
+		}
+
+		$this->forget_elements();
+
+		return $id;
 	}
 
 	/**
@@ -356,5 +415,222 @@ class Test_Xmlrpc_And_File_Edit extends WP_UnitTestCase {
 		$this->assertSame( 'blocked_locked', $blocker['variant'] );
 		$this->assertFalse( $blocker['retreat'], 'An editor that is already locked is not a reason to switch anything off.' );
 		$this->assertTrue( $blocker['checked'], 'The row should read as on, because the editor is locked.' );
+	}
+
+	/**
+	 * A GeneratePress site with no PHP in any element has nothing to report.
+	 *
+	 * The stub in tests/stubs makes the Elements module permanently present, so
+	 * this is the ordinary GeneratePress site: the module is there, the query
+	 * runs, and it finds nothing.
+	 *
+	 * @return void
+	 */
+	public function test_generatepress_alone_does_not_block_the_row() {
+		$this->set_config_defined( false );
+		$this->register_elements();
+
+		$this->assertSame( 0, Detection::gp_php_elements() );
+		$this->assertNull( Detection::file_edit_blocker() );
+	}
+
+	/**
+	 * One element running PHP blocks the row, and is a retreat.
+	 *
+	 * The row reads as off because it is off: a blocked feature never starts, so
+	 * the editor really is still unlocked and saying otherwise would be a lie.
+	 *
+	 * @return void
+	 */
+	public function test_one_php_element_blocks_the_row() {
+		$this->set_config_defined( false );
+		$this->register_elements();
+		$this->element();
+
+		$blocker = Detection::file_edit_blocker();
+
+		$this->assertSame( 'blocked_gp_one', $blocker['variant'] );
+		$this->assertTrue( $blocker['retreat'], 'The damage lands on the element, where nobody would think to look.' );
+		$this->assertFalse( $blocker['checked'], 'The row must not read as on while the editor is unlocked.' );
+	}
+
+	/**
+	 * Several elements are counted, and the sentence quotes the number.
+	 *
+	 * @return void
+	 */
+	public function test_several_php_elements_are_counted() {
+		$this->set_config_defined( false );
+		$this->register_elements();
+		$this->element();
+		$this->element();
+		$this->element();
+
+		$blocker = Detection::file_edit_blocker();
+
+		$this->assertSame( 'blocked_gp_many', $blocker['variant'] );
+		$this->assertSame(
+			array( 'elements' => 3 ),
+			Detection::counts( 'disallow_file_edit', 'blocked_gp_many' )
+		);
+	}
+
+	/**
+	 * Three elements that cannot run PHP, and none of them counts.
+	 *
+	 * A draft runs nowhere, a layout holds no PHP, and a hook element with the
+	 * box unticked is the ordinary case on every GeneratePress site.
+	 *
+	 * @return void
+	 */
+	public function test_elements_that_cannot_run_php_are_not_counted() {
+		$this->set_config_defined( false );
+		$this->register_elements();
+		$this->element( 'hook', true, 'draft' );
+		$this->element( 'layout', true );
+		$this->element( 'hook', false );
+
+		$this->assertSame( 0, Detection::gp_php_elements() );
+		$this->assertNull( Detection::file_edit_blocker() );
+	}
+
+	/**
+	 * A site that has hooked GeneratePress's own filter is never blocked.
+	 *
+	 * Asked of WordPress rather than of a list of names, in the same way remote
+	 * publishing is. Hooking generate_hooks_execute_php takes the decision away
+	 * from the constant, so our switch no longer changes the answer.
+	 *
+	 * The filter is hooked after the count has already been taken, and nothing is
+	 * reset in between, which is the case that matters. The blocker is asked at
+	 * init and again at wp_loaded, and anything hooked by a theme or a snippet
+	 * between those two is invisible to the first. A remembered answer would hide
+	 * it from the second as well, and this site would lose its file editor lock to
+	 * a retreat it never needed.
+	 *
+	 * @return void
+	 */
+	public function test_generatepress_own_escape_hatch_clears_the_blocker() {
+		$this->set_config_defined( false );
+		$this->register_elements();
+		$this->element();
+
+		$this->assertSame( 1, Detection::gp_php_elements(), 'The count is taken, and remembered, before the filter exists.' );
+		$this->assertSame( 'blocked_gp_one', Detection::file_edit_blocker()['variant'] );
+
+		add_filter( 'generate_hooks_execute_php', '__return_true' );
+
+		$this->assertSame( 0, Detection::gp_php_elements(), 'The escape hatch must outrank a count already taken.' );
+		$this->assertNull( Detection::file_edit_blocker() );
+
+		remove_filter( 'generate_hooks_execute_php', '__return_true' );
+
+		$this->assertSame( 'blocked_gp_one', Detection::file_edit_blocker()['variant'], 'And removing it must bring the blocker back.' );
+	}
+
+	/**
+	 * A constant in wp-config.php is answered before GeneratePress is.
+	 *
+	 * A constant set to false leaves GeneratePress working normally, because it
+	 * tests for true rather than for existence, so there is no GeneratePress
+	 * problem to report and the wp-config sentence is the whole of the answer.
+	 *
+	 * @return void
+	 */
+	public function test_wp_config_answers_before_generatepress() {
+		File_Edit::init();
+		$this->set_config_defined( true );
+		$this->register_elements();
+		$this->element();
+
+		$this->assertSame( 'blocked_locked', Detection::file_edit_blocker()['variant'] );
+	}
+
+	/**
+	 * The banner names the reason the switch actually moved.
+	 *
+	 * Two causes share one feature key, so the sentence cannot be looked up from
+	 * the key alone, and it cannot be worked out again later either: the banner
+	 * outlives the situation behind it. The cause is recorded when the switch
+	 * moves, and this is the assertion that it is recorded and then used.
+	 *
+	 * @return void
+	 */
+	public function test_the_banner_names_the_cause_of_the_retreat() {
+		$this->enable( 'disallow_file_edit' );
+
+		Settings::switch_off( 'disallow_file_edit', 'blocked_gp_one' );
+
+		$this->assertSame(
+			array( 'disallow_file_edit' => 'blocked_gp_one' ),
+			Settings::live( 'switched_off_by' )
+		);
+
+		$feature = Registry::all()['disallow_file_edit'];
+
+		$this->assertStringContainsString(
+			'GeneratePress',
+			Registry::retreat_line( $feature, 'blocked_gp_one' )
+		);
+		$this->assertStringContainsString(
+			'wp-config.php',
+			Registry::retreat_line( $feature, 'blocked_forced' )
+		);
+	}
+
+	/**
+	 * A retreat recorded before causes were kept still says something true.
+	 *
+	 * What an upgrade from an earlier version leaves behind: a feature key with
+	 * no cause beside it. The default sentence is written to be true whichever
+	 * cause it turns out to have been, so it names neither.
+	 *
+	 * @return void
+	 */
+	public function test_a_retreat_with_no_recorded_cause_falls_back() {
+		$this->enable( 'disallow_file_edit' );
+
+		Settings::switch_off( 'disallow_file_edit' );
+
+		$this->assertSame( array(), Settings::live( 'switched_off_by' ) );
+
+		$line = Registry::retreat_line( Registry::all()['disallow_file_edit'], '' );
+
+		$this->assertStringContainsString( 'Lock the file editor', $line );
+		$this->assertStringNotContainsString( 'GeneratePress', $line );
+		$this->assertStringNotContainsString( 'wp-config.php', $line );
+	}
+
+	/**
+	 * A feature with one cause still writes one sentence, and it is used.
+	 *
+	 * @return void
+	 */
+	public function test_a_single_sentence_is_used_as_written() {
+		$feature = Registry::all()['block_xmlrpc'];
+
+		$this->assertSame(
+			$feature['retreat_line'],
+			Registry::retreat_line( $feature, 'blocked' )
+		);
+	}
+
+	/**
+	 * Switches a feature on, so that switching it off is a real move.
+	 *
+	 * Switch_off() declines to write when the switch is already where it would
+	 * put it, which is what keeps a retreat from rewriting the option on every
+	 * request. A test that starts from the default would be asserting about a
+	 * write that never happened.
+	 *
+	 * @param string $key A feature key from the registry.
+	 * @return void
+	 */
+	private function enable( $key ) {
+		$settings                     = Settings::defaults();
+		$settings['features'][ $key ] = true;
+
+		update_option( HOPSEN_OPTION, $settings );
+		Settings::flush();
 	}
 }

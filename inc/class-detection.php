@@ -23,6 +23,23 @@ defined( 'ABSPATH' ) || exit;
 class Detection {
 
 	/**
+	 * How many GeneratePress hook elements hold PHP, once counted this request.
+	 *
+	 * The query alone, and deliberately not the answer. What the site holds cannot
+	 * change between two calls on one request, and this is the only question in
+	 * this class asked on an ordinary front-end request rather than only on the
+	 * settings screen, so it is the only one worth not asking twice.
+	 *
+	 * Whether GeneratePress is listening, and whether the site has overruled it,
+	 * are asked fresh every time. Both can become true partway through a request,
+	 * and remembering the first answer would make a later one unreachable. Null
+	 * until the query runs, which on a site without GeneratePress is for ever.
+	 *
+	 * @var int|null
+	 */
+	private static $gp_php_elements = null;
+
+	/**
 	 * The states a fresh install starts each feature in.
 	 *
 	 * The only moment a switch is ever turned on for the owner. Features not named
@@ -133,6 +150,10 @@ class Detection {
 			return array( 'comments' => self::comments_recent() );
 		}
 
+		if ( 'disallow_file_edit' === $key && 'blocked_gp_many' === $variant ) {
+			return array( 'elements' => self::gp_php_elements() );
+		}
+
 		return array();
 	}
 
@@ -176,13 +197,15 @@ class Detection {
 	 *
 	 * Defined true means the editor is already locked and our switch has nothing
 	 * left to do, so the row reads as on and nothing is written. Defined false
-	 * means wp-config beats us. Only the second is a retreat.
+	 * means wp-config beats us, and also that GeneratePress is unaffected, since
+	 * it tests the constant for true rather than for existence. Either way
+	 * wp-config has settled the question and is answered first.
 	 *
 	 * @return array<string, mixed>|null A blocker, or null when nothing is stopping it.
 	 */
 	public static function file_edit_blocker() {
 		if ( false === Features\File_Edit::config_defines_it() ) {
-			return null;
+			return self::gp_blocker();
 		}
 
 		if ( true === (bool) constant( 'DISALLOW_FILE_EDIT' ) ) {
@@ -197,6 +220,104 @@ class Detection {
 			'variant' => 'blocked_forced',
 			'retreat' => true,
 		);
+	}
+
+	/**
+	 * Why locking the file editor would cost this site something, if it would.
+	 *
+	 * A retreat, for the same reason blocking remote publishing is one: the damage
+	 * lands somewhere the owner would not think to look. GeneratePress reads a
+	 * locked file editor as an instruction to stop running PHP in its elements,
+	 * and what it does instead is print the element's source into the page rather
+	 * than say anything. See refs/gotchas.md, "GeneratePress".
+	 *
+	 * The row reads as off because it is off: a blocked feature never starts, so
+	 * the editor stays unlocked until this clears.
+	 *
+	 * @return array<string, mixed>|null A blocker, or null when nothing is stopping it.
+	 */
+	private static function gp_blocker() {
+		$elements = self::gp_php_elements();
+
+		if ( 0 === $elements ) {
+			return null;
+		}
+
+		return array(
+			'variant' => 1 === $elements ? 'blocked_gp_one' : 'blocked_gp_many',
+			'retreat' => true,
+			'checked' => false,
+		);
+	}
+
+	/**
+	 * Counts the published GeneratePress elements that run PHP.
+	 *
+	 * Two guards stand in front of the query, and neither is a plugin name.
+	 *
+	 * The helper class is required from gp-premium.php at file scope, so its
+	 * absence means either that GeneratePress Premium is not installed or that its
+	 * Elements module is switched off, and both mean there is nothing to break.
+	 *
+	 * The filter is GeneratePress's own escape hatch. A site that has hooked it has
+	 * taken the decision away from DISALLOW_FILE_EDIT, so our switch no longer
+	 * changes the answer and there is nothing here to report. Asked of WordPress
+	 * rather than of a list of names, in the same way remote publishing is.
+	 *
+	 * Only hook elements are counted. The other three element types hold no PHP,
+	 * and a draft runs nowhere.
+	 *
+	 * @return int The number of published hook elements set to execute PHP.
+	 */
+	public static function gp_php_elements() {
+		if ( ! class_exists( 'GeneratePress_Elements_Helper' ) ) {
+			return 0;
+		}
+
+		/*
+		 * Asked on every call rather than once, and the file editor blocker is
+		 * called twice: at init, while features start, and again at wp_loaded,
+		 * where the retreat is decided. A theme or a snippet that hooks this
+		 * after init would be invisible to the first and plain to the second, and
+		 * a remembered no would hide it from both. The later answer is the one
+		 * that decides whether a switch moves, which is the same reason the
+		 * XML-RPC question is settled at wp_loaded and not before.
+		 */
+		if ( false !== has_filter( 'generate_hooks_execute_php' ) ) {
+			return 0;
+		}
+
+		if ( null !== self::$gp_php_elements ) {
+			return self::$gp_php_elements;
+		}
+
+		$elements = get_posts(
+			array(
+				'post_type'        => 'gp_elements',
+				'post_status'      => 'publish',
+				// phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_numberposts -- GeneratePress loads its own elements with the same limit, so a site past it is already past it.
+				'numberposts'      => 500,
+				'fields'           => 'ids',
+				'no_found_rows'    => true,
+				'suppress_filters' => false,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Two indexed keys on a post type that holds tens of rows, and the only way to ask this question.
+				'meta_query'       => array(
+					'relation' => 'AND',
+					array(
+						'key'   => '_generate_element_type',
+						'value' => 'hook',
+					),
+					array(
+						'key'   => '_generate_hook_execute_php',
+						'value' => 'true',
+					),
+				),
+			)
+		);
+
+		self::$gp_php_elements = count( $elements );
+
+		return self::$gp_php_elements;
 	}
 
 	/**
@@ -308,21 +429,100 @@ class Detection {
 	}
 
 	/**
+	 * Callbacks WordPress hooks to xmlrpc_methods itself.
+	 *
+	 * Core registers these from default-filters.php on every site, so their
+	 * presence says nothing about whether anything here wants XML-RPC. Both
+	 * entries only ever remove a method from the table, never add one, which is
+	 * why ignoring them cannot hide a site that needs the endpoint.
+	 *
+	 * Naming them is not the plugin-name matching this class refuses elsewhere.
+	 * A plugin name is a guess about what some third party might do. These are
+	 * core's own registrations, read at the source and understood, and the list
+	 * is exhaustive for the versions named in refs/gotchas.md, "XML-RPC".
+	 *
+	 * @var string[]
+	 */
+	private static $core_xmlrpc_callbacks = array(
+		'wp_maybe_disable_xmlrpc_pingback_for_environment',
+	);
+
+	/**
 	 * Whether anything on this site is using XML-RPC.
 	 *
 	 * Asked of WordPress rather than of a list of plugin names. Core builds the
 	 * XML-RPC method table from everything hooked to xmlrpc_methods, so having
-	 * hooked it is what "needs XML-RPC" means. Names fail in both directions: see
-	 * refs/gotchas.md, "XML-RPC".
+	 * hooked it is what "needs XML-RPC" means, once core's own hooks are set
+	 * aside. Names fail in both directions: see refs/gotchas.md, "XML-RPC".
+	 *
+	 * WordPress 7.1 began hooking the filter itself, so "anything at all is
+	 * hooked" stopped being the question on that day and has_filter() alone now
+	 * answers yes on every site alive. What is asked instead is whether anything
+	 * other than core is hooked.
 	 *
 	 * @return bool True when something on this site extends XML-RPC.
 	 */
 	public static function xmlrpc_in_use() {
-		if ( false !== has_filter( 'xmlrpc_methods' ) ) {
+		if ( true === self::has_foreign_filter( 'xmlrpc_methods', self::$core_xmlrpc_callbacks ) ) {
 			return true;
 		}
 
 		return self::jetpack_connected();
+	}
+
+	/**
+	 * Whether a hook carries any callback that is not one of core's own.
+	 *
+	 * Walks the registered callbacks rather than asking has_filter(), which
+	 * cannot tell core's registrations from anybody else's.
+	 *
+	 * Matched on the callback name and never on where the function is defined.
+	 * Reflection would report the file a function was written in rather than who
+	 * hooked it, so a site whose own functions.php hooks a core helper, say
+	 * __return_empty_array, would be read as core and ignored. That site has made
+	 * a decision about XML-RPC and we would be overruling it silently.
+	 *
+	 * An unrecognised callback counts as somebody using the hook, which is the
+	 * direction that costs a switch rather than a site: a later WordPress adding
+	 * a second callback of its own leaves this feature blocked until the name is
+	 * added here, and nothing breaks in the meantime.
+	 *
+	 * @param string   $hook  The hook to inspect.
+	 * @param string[] $known Callback names that belong to core.
+	 * @return bool True when something other than core has hooked it.
+	 */
+	private static function has_foreign_filter( $hook, array $known ) {
+		if ( false === has_filter( $hook ) ) {
+			return false;
+		}
+
+		if ( ! isset( $GLOBALS['wp_filter'][ $hook ] ) ) {
+			return false;
+		}
+
+		$registered = $GLOBALS['wp_filter'][ $hook ];
+
+		if ( ! isset( $registered->callbacks ) || ! is_array( $registered->callbacks ) ) {
+			return true;
+		}
+
+		foreach ( $registered->callbacks as $callbacks ) {
+			foreach ( $callbacks as $callback ) {
+				if ( ! isset( $callback['function'] ) ) {
+					return true;
+				}
+
+				if ( ! is_string( $callback['function'] ) ) {
+					return true;
+				}
+
+				if ( ! in_array( $callback['function'], $known, true ) ) {
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	/**

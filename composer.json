@@ -18,10 +18,12 @@
 	"scripts": {
 		"lint": [
 			"@lint:phpcs",
-			"@lint:namespace"
+			"@lint:namespace",
+			"@lint:emdash"
 		],
 		"lint:phpcs": "phpcs",
 		"lint:namespace": "grep -rnE \"(new|instanceof)[[:space:]]+WP_\" inc/ && echo '  ^^ core class used without a leading backslash inside a namespace' && exit 1 || exit 0",
+		"lint:emdash": "grep -rn \"\u2014\" inc/ refs/ tests/cases/ tests/stubs/ readme.txt README.md hopelessly-sensible.php uninstall.php && echo '  ^^ em-dash found. Use a comma, a colon, parentheses, or rephrase.' && exit 1 || exit 0",
 		"lint:fix": "phpcbf",
 		"test": "phpunit",
 		"check": [
@@ -44,6 +46,7 @@
 	"scripts-descriptions": {
 		"lint": "Coding standards, then a check that no core class is referenced unqualified.",
 		"lint:namespace": "PHP falls back to the global namespace for functions and constants, but not for classes. WP_Error inside our namespace is a fatal that phpcs cannot see.",
+		"lint:emdash": "The house style bans em-dashes in code, comments, documentation and user-facing copy. A rule nobody can see is a rule that decays, so it is grepped rather than remembered.",
 		"test": "The WordPress core test suite. Needs a MySQL server and a WordPress codebase; see tests/wp-tests-config.php for the two paths it expects.",
 		"check": "Everything that has to pass before a change is finished: lint, then tests.",
 		"build:committed": "Refuses to build from a dirty working tree, because the zip comes from HEAD and would not contain your uncommitted fix.",

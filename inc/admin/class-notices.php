@@ -173,6 +173,7 @@ class Notices {
 	 */
 	private static function retreat_lines() {
 		$switched_off = Settings::live( 'switched_off' );
+		$causes       = Settings::live( 'switched_off_by' );
 		$dismissed    = Settings::live( 'dismissed' );
 
 		if ( ! is_array( $switched_off ) || empty( $switched_off ) ) {
@@ -191,7 +192,14 @@ class Notices {
 				continue;
 			}
 
-			$lines[] = $features[ $key ]['retreat_line'];
+			$cause = isset( $causes[ $key ] ) ? $causes[ $key ] : '';
+			$line  = Registry::retreat_line( $features[ $key ], $cause );
+
+			if ( '' === $line ) {
+				continue;
+			}
+
+			$lines[] = $line;
 		}
 
 		return $lines;
