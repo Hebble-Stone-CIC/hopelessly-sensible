@@ -4,7 +4,7 @@ Tags: security, hardening, xmlrpc, comments, privacy
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -89,6 +89,9 @@ WordPress does not let you rename a user. The usual route is to create a second 
 2. An option this site cannot use, still on the screen, saying what is stopping it.
 
 == Changelog ==
+
+= 1.1.1 =
+* Changed: three messages borrowed from WordPress itself (the vague login error, the remote publishing refusal and the user list refusal) are now translatable as part of this plugin, as the plugin directory requires, rather than inheriting the translations WordPress ships with.
 
 = 1.1.0 =
 * Fixed: on WordPress 7.1, "Block remote publishing" could not be switched on at all, and switched itself off on sites that had it on. WordPress 7.1 began using the same hook this plugin watches to work out whether anything on your site needs remote publishing, and the plugin read that as your site needing it.

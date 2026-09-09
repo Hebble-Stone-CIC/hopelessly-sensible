@@ -99,7 +99,9 @@ and embeds open.
 
 `pluggable.php:713` uses `authentication_failed` with *"Invalid username, email
 address or incorrect password."* Reusing both means the refusal is
-indistinguishable from core's own and arrives translated everywhere WordPress is.
+indistinguishable from core's own. It cannot also arrive translated everywhere
+WordPress is: see "Plugin Check tolerates the `default` text domain, the review
+team does not" under Tooling.
 
 ### Replacing the error does not break login limiters
 
@@ -669,8 +671,16 @@ With `parallel=8` in the ruleset, the progress line reads `5 / 5` for nine files
 Use `--parallel=1` or the JSON report to see the real list. Nothing is being
 skipped.
 
-### Plugin Check tolerates the `default` text domain
+### Plugin Check tolerates the `default` text domain, the review team does not
 
 `I18n_Usage_Check.php:104`: *"Downgrade errors about usage of the 'default' text
-domain from WordPress Core to warnings."* Reusing core's strings is an accepted
-practice, not a violation.
+domain from WordPress Core to warnings."* So the tool accepts core's strings on
+core's domain, which is how a plugin inherits core's translations for them.
+
+The plugin review team does not. Version 1.1.0 was submitted with three core
+strings on `default`, the reply explained why and pointed at the downgrade, and
+the next review restated the finding against the same three strings. Their rule
+is that every text domain matches the slug, and Plugin Check's leniency is the
+tool's rather than theirs. The strings moved onto `hopelessly-sensible` in 1.1.1,
+which costs their translations until the plugin's own are made. GlotPress
+suggests identical strings from core to translators, so that cost is small.

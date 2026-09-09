@@ -77,7 +77,8 @@ class Xmlrpc {
 	 *
 	 * Core defines XMLRPC_REQUEST before it loads WordPress, so no guessing from
 	 * the request URI is needed. 403 rather than 404: the file is plainly there.
-	 * The wording is core's own.
+	 * The wording is core's own, on this plugin's text domain because the
+	 * directory requires it.
 	 *
 	 * @return void
 	 */
@@ -92,7 +93,7 @@ class Xmlrpc {
 			nocache_headers();
 		}
 
-		echo esc_html( __( 'XML-RPC services are disabled on this site.', 'default' ) );
+		echo esc_html( __( 'XML-RPC services are disabled on this site.', 'hopelessly-sensible' ) );
 
 		exit;
 	}

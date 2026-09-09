@@ -46,8 +46,10 @@ class Login_Errors {
 	 *
 	 * Anything else an authentication handler has to say is carried across
 	 * untouched, so two-factor prompts and captcha failures still reach the person
-	 * logging in. The replacement is core's own code and wording, which keeps it
-	 * translated and keeps login limiters counting.
+	 * logging in. The replacement is core's own code and wording, which keeps
+	 * login limiters counting. The string sits on this plugin's text domain
+	 * rather than core's, because the directory requires it, so it is translated
+	 * through this plugin's language packs rather than inherited from core.
 	 *
 	 * @param null|\WP_User|\WP_Error $user The result so far from the authenticate filter.
 	 * @return null|\WP_User|\WP_Error The result, with any revealing error made vague.
@@ -77,7 +79,7 @@ class Login_Errors {
 
 		$vague->add(
 			'authentication_failed',
-			__( '<strong>Error:</strong> Invalid username, email address or incorrect password.', 'default' )
+			__( '<strong>Error:</strong> Invalid username, email address or incorrect password.', 'hopelessly-sensible' )
 		);
 
 		return $vague;

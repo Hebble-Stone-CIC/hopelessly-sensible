@@ -144,8 +144,9 @@ class Test_Login_Errors extends WP_UnitTestCase {
 	}
 
 	/**
-	 * The message is core's own string, so it arrives translated wherever
-	 * WordPress is, and the refusal is indistinguishable from core's.
+	 * The message is core's own wording, so the refusal is indistinguishable
+	 * from core's. It sits on this plugin's text domain because the directory
+	 * requires it.
 	 *
 	 * @return void
 	 */
@@ -153,7 +154,7 @@ class Test_Login_Errors extends WP_UnitTestCase {
 		$result = $this->filtered( new WP_Error( 'invalid_username', 'No such user.' ) );
 
 		$this->assertSame(
-			__( '<strong>Error:</strong> Invalid username, email address or incorrect password.', 'default' ),
+			__( '<strong>Error:</strong> Invalid username, email address or incorrect password.', 'hopelessly-sensible' ),
 			$result->get_error_message()
 		);
 	}

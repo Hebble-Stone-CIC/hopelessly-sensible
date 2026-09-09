@@ -55,7 +55,7 @@ class Rest_Users {
 
 		return new \WP_Error(
 			'rest_user_cannot_view',
-			__( 'Sorry, you are not allowed to list users.', 'default' ),
+			__( 'Sorry, you are not allowed to list users.', 'hopelessly-sensible' ),
 			array( 'status' => rest_authorization_required_code() )
 		);
 	}
