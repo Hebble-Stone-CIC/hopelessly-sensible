@@ -102,10 +102,10 @@ class Registry {
 				'blocker'      => null,
 				'callback'     => array( Features\Author_Urls::class, 'init' ),
 				'state_line'   => array(
-					'off_one'  => __( 'One person publishes posts here, so these pages have nothing your visitors need.', 'hopelessly-sensible' ),
+					'off_theme'   => __( 'Your theme has a design of its own for author pages, so it was probably built to show them. Switching this on will make them Not Found.', 'hopelessly-sensible' ),
+					'off_exposed' => __( 'Every account on your site has one of these pages, written or not, and each address gives away a username.', 'hopelessly-sensible' ),
 					/* translators: {authors} is replaced with the number of people publishing posts on this site. Keep the braces. */
-					'off_many' => __( '{authors} people publish posts here, and sites with several writers often link to author pages from their bylines.', 'hopelessly-sensible' ),
-					'off_none' => __( 'Nothing is published here yet, so there are no author pages to hide. Worth switching on before you publish.', 'hopelessly-sensible' ),
+					'on_many'     => __( '{authors} people publish posts here. If their names are linked from your posts, those links now show Not Found.', 'hopelessly-sensible' ),
 				),
 			),
 
@@ -134,7 +134,7 @@ class Registry {
 			'block_xmlrpc'        => array(
 				'label'        => __( 'Block remote publishing', 'hopelessly-sensible' ),
 				'description'  => __( 'XML-RPC is an old way for apps to post to your site remotely. Most sites no longer use it, and it is a favourite of automated password-guessing tools because one request can try many passwords at once.', 'hopelessly-sensible' ),
-				'warning'      => __( 'If anyone on your team writes posts from their phone using the WordPress app, switching this on will stop them. Jetpack needs remote publishing too, as do several plugins that connect a shop to WordPress.com. We can see anything on your site that asks WordPress for remote publishing, but there is no way for us to see the mobile app, so ask around before you switch this on.', 'hopelessly-sensible' ),
+				'warning'      => __( 'If anyone on your team writes posts from their phone using the WordPress app, switching this on will stop them. Jetpack needs remote publishing too, as do several plugins that connect a shop to WordPress.com. We can see any plugin on your site that asks WordPress for remote publishing, but there is no way for us to see the mobile app, so ask around before you switch this on.', 'hopelessly-sensible' ),
 				'warning_open' => true,
 				'group'        => 'optional',
 				'default'      => false,
@@ -142,8 +142,12 @@ class Registry {
 				'blocker'      => array( Detection::class, 'xmlrpc_blocker' ),
 				'callback'     => array( Features\Xmlrpc::class, 'init' ),
 				'state_line'   => array(
-					'off_idle' => __( 'Nothing on your site is asking for remote publishing at the moment.', 'hopelessly-sensible' ),
-					'blocked'  => __( 'Something on your site is using remote publishing right now, so this cannot be switched on. If you know what it is and no longer need it, turn it off there first and this switch will free up.', 'hopelessly-sensible' ),
+					'off_idle'        => __( 'Nothing on your site is asking for remote publishing at the moment.', 'hopelessly-sensible' ),
+					/* translators: {line} is replaced with the line number in wp-config.php. Keep the braces. */
+					'off_config'      => __( 'Your wp-config.php carries a snippet of its own about remote publishing, at line {line}. Hosts often add one to switch off pingbacks, which is a small part of what this switch does: this closes the whole of remote publishing, pingbacks included, so that snippet does not stop you switching this on.', 'hopelessly-sensible' ),
+					'blocked'         => __( 'Something on your site is using remote publishing right now, so this cannot be switched on. If you know what it is and no longer need it, turn it off there first and this switch will free up.', 'hopelessly-sensible' ),
+					/* translators: {file} is replaced with a file path and {line} with a line number in it. Keep the braces. */
+					'blocked_closure' => __( 'Something on your site is using remote publishing right now, so this cannot be switched on. It was added by {file} at line {line}, which is where to look if you no longer need it.', 'hopelessly-sensible' ),
 				),
 				'retreat_line' => __( 'Something on your site started using remote publishing, and "Block remote publishing" would have stopped it working, so we switched that setting off.', 'hopelessly-sensible' ),
 			),

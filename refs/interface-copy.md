@@ -79,14 +79,24 @@ previews other sites generate when they link to you.
 > those links will stop working. Look at a post: if the author's name underneath
 > the title is a link, switching this on will break it.
 
-**State line, off, one writer:** One person publishes posts here, so these pages
-have nothing your visitors need.
+**State line, off, theme ships an author template:** Your theme has a design of
+its own for author pages, so it was probably built to show them. Switching this
+on will make them Not Found.
 
-**State line, off, several writers:** {authors} people publish posts here, and
-sites with several writers often link to author pages from their bylines.
+**State line, off, otherwise:** Every account on your site has one of these
+pages, written or not, and each address gives away a username.
 
-**State line, off, nothing published:** Nothing is published here yet, so there
-are no author pages to hide. Worth switching on before you publish.
+**State line, on, several writers:** {authors} people publish posts here. If
+their names are linked from your posts, those links now show Not Found.
+
+**State line, on, one writer or none:** none.
+
+The off lines do not count writers, and there is no sentence for an empty site.
+The old copy told an empty site there were no author pages to hide, and
+`?author=1` redirects to the username on an empty site exactly as it does on a
+busy one. The number of writers is not what decides whether the pages leak; it
+is what decides whether hiding them may have broken a link, which is why it is
+quoted only under a switch that is on.
 
 ---
 
@@ -149,16 +159,35 @@ because one request can try many passwords at once.
 
 > If anyone on your team writes posts from their phone using the WordPress app,
 > switching this on will stop them. Jetpack needs remote publishing too, as do
-> several plugins that connect a shop to WordPress.com. We can see anything on
+> several plugins that connect a shop to WordPress.com. We can see any plugin on
 > your site that asks WordPress for remote publishing, but there is no way for
 > us to see the mobile app, so ask around before you switch this on.
 
 **State line, off, nothing using it:** Nothing on your site is asking for
 remote publishing at the moment.
 
+**State line, off, a snippet in wp-config.php:** Your wp-config.php carries a
+snippet of its own about remote publishing, at line {line}. Hosts often add one
+to switch off pingbacks, which is a small part of what this switch does: this
+closes the whole of remote publishing, pingbacks included, so that snippet does
+not stop you switching this on.
+
 **State line, blocked:** Something on your site is using remote publishing right
 now, so this cannot be switched on. If you know what it is and no longer need
 it, turn it off there first and this switch will free up.
+
+**State line, blocked by a closure:** Something on your site is using remote
+publishing right now, so this cannot be switched on. It was added by {file} at
+line {line}, which is where to look if you no longer need it.
+
+The wp-config.php line makes no claim about what the snippet does, because the
+plugin cannot read it. What it says is true whatever the snippet does: this
+switch refuses the endpoint outright, so once it is on the snippet has nothing
+left to act on. Every Bitnami and Lightsail install carries one that drops
+pingbacks only, and leaves the login methods answering.
+
+`{file}` is a path relative to the site root, and `{line}` is printed as
+written rather than formatted as a number.
 
 ---
 

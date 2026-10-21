@@ -37,29 +37,214 @@ class Test_Detection extends WP_UnitTestCase {
 	}
 
 	/**
-	 * One writer is the case that switches author pages on at activation.
+	 * Files this test wrote, to be removed afterwards.
+	 *
+	 * @var string[]
+	 */
+	private $scratch = array();
+
+	/**
+	 * Removes anything written to disk, and forgets any wp-config.php stand-in.
 	 *
 	 * @return void
 	 */
-	public function test_one_author_is_counted_as_one() {
-		$this->writer();
+	public function tear_down() {
+		foreach ( array_reverse( $this->scratch ) as $path ) {
+			if ( is_dir( $path ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Test scratch space, under the temp directory, no filesystem credentials involved.
+				rmdir( $path );
+				continue;
+			}
 
-		$this->assertSame( 1, Detection::authors() );
-		$this->assertTrue( Detection::opening_states()['author_urls'] );
+			if ( file_exists( $path ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Same scratch space.
+				unlink( $path );
+			}
+		}
+
+		$this->scratch = array();
+
+		$this->set_owner_files( null );
+
+		parent::tear_down();
 	}
 
 	/**
-	 * Six writers is the case that leaves them alone.
+	 * A fresh empty directory under the temp directory, removed afterwards.
+	 *
+	 * @return string The directory, without a trailing slash.
+	 */
+	private function scratch_dir() {
+		$dir = untrailingslashit( get_temp_dir() ) . '/hopsen-' . wp_generate_password( 8, false );
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test scratch space, under the temp directory, no filesystem credentials involved.
+		mkdir( $dir );
+
+		$this->scratch[] = $dir;
+
+		return $dir;
+	}
+
+	/**
+	 * Writes a file for the test, removed afterwards.
+	 *
+	 * @param string $path    Where to write it.
+	 * @param string $content What to write.
+	 * @return string The path, resolved.
+	 */
+	private function scratch_file( $path, $content ) {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Same scratch space.
+		file_put_contents( $path, $content );
+
+		$this->scratch[] = $path;
+
+		return realpath( $path );
+	}
+
+	/**
+	 * Points the theme's directories, as WordPress reports them, somewhere else.
+	 *
+	 * Through core's own filters, so nothing in the plugin is bypassed. Both are
+	 * pointed at the same place unless a parent is given.
+	 *
+	 * @param string      $child    The stylesheet directory.
+	 * @param string|null $template The template directory, or null to match.
+	 * @return void
+	 */
+	private function pretend_theme( $child, $template = null ) {
+		$template = null === $template ? $child : $template;
+
+		add_filter(
+			'stylesheet_directory',
+			static function () use ( $child ) {
+				return $child;
+			}
+		);
+
+		add_filter(
+			'template_directory',
+			static function () use ( $template ) {
+				return $template;
+			}
+		);
+	}
+
+	/**
+	 * Tells Detection which files count as the owner's own.
+	 *
+	 * The real list is wp-config.php, and no test should be writing closures
+	 * into one of those. Null puts the real list back.
+	 *
+	 * @param string[]|null $files Resolved paths, or null to forget.
+	 * @return void
+	 */
+	private function set_owner_files( $files ) {
+		$property = new ReflectionProperty( Detection::class, 'owner_files' );
+		$property->setAccessible( true );
+		$property->setValue( null, $files );
+	}
+
+	/**
+	 * Writes a file that hooks xmlrpc_methods with a closure, and loads it.
+	 *
+	 * The shape is the one every Bitnami image appends to wp-config.php: a
+	 * closure that drops pingback.ping and nothing else.
+	 *
+	 * @param string $dir The directory to write it in.
+	 * @return string The resolved path of the file.
+	 */
+	private function hook_from_file( $dir ) {
+		$path = $this->scratch_file(
+			$dir . '/wp-config.php',
+			"<?php\n"
+			. "add_filter( 'xmlrpc_methods', function ( \$methods ) {\n"
+			. "\tunset( \$methods['pingback.ping'] );\n"
+			. "\treturn \$methods;\n"
+			. "} );\n"
+		);
+
+		require $path;
+
+		return $path;
+	}
+
+	/**
+	 * Author pages open on, and the number of writers has nothing to do with it.
+	 *
+	 * The old rule switched them on for exactly one writer and left them open
+	 * for anybody else. Every account has an author address whether or not it
+	 * has written anything, so six writers leak exactly as much as one.
 	 *
 	 * @return void
 	 */
-	public function test_six_authors_are_counted_as_six() {
-		for ( $i = 0; $i < 6; $i++ ) {
+	public function test_author_pages_open_on_whatever_the_number_of_writers() {
+		$this->assertTrue( Detection::opening_states()['author_urls'], 'Nothing published yet.' );
+
+		$this->writer();
+
+		$this->assertSame( 1, Detection::authors() );
+		$this->assertTrue( Detection::opening_states()['author_urls'], 'One writer.' );
+
+		for ( $i = 0; $i < 5; $i++ ) {
 			$this->writer();
 		}
 
 		$this->assertSame( 6, Detection::authors() );
+		$this->assertTrue( Detection::opening_states()['author_urls'], 'Six writers.' );
+	}
+
+	/**
+	 * A theme with an author template of its own was built to show author
+	 * pages, and that is the one thing that leaves them open.
+	 *
+	 * @return void
+	 */
+	public function test_a_theme_built_for_author_pages_leaves_them_open() {
+		$dir = $this->scratch_dir();
+
+		$this->scratch_file( $dir . '/author.php', "<?php\n" );
+		$this->pretend_theme( $dir );
+
+		$this->assertTrue( Detection::theme_has_author_template() );
 		$this->assertFalse( Detection::opening_states()['author_urls'] );
+		$this->assertSame( 'off_theme', Detection::state_variant( 'author_urls', false ) );
+	}
+
+	/**
+	 * A block theme keeps its templates in a folder, and the parent's count as
+	 * much as the child's.
+	 *
+	 * @return void
+	 */
+	public function test_a_parent_block_theme_author_template_counts() {
+		$child  = $this->scratch_dir();
+		$parent = $this->scratch_dir();
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Same scratch space.
+		mkdir( $parent . '/templates' );
+		$this->scratch[] = $parent . '/templates';
+		$this->scratch_file( $parent . '/templates/author.html', '' );
+		$this->pretend_theme( $child, $parent );
+
+		$this->assertTrue( Detection::theme_has_author_template() );
+		$this->assertFalse( Detection::opening_states()['author_urls'] );
+	}
+
+	/**
+	 * A theme without one is the ordinary case.
+	 *
+	 * The suite's own theme is asked first, so a default theme growing an
+	 * author template would show up here rather than in a wrong opening state.
+	 *
+	 * @return void
+	 */
+	public function test_an_ordinary_theme_has_no_author_template() {
+		$this->assertFalse( Detection::theme_has_author_template() );
+
+		$this->pretend_theme( $this->scratch_dir() );
+
+		$this->assertFalse( Detection::theme_has_author_template() );
+		$this->assertTrue( Detection::opening_states()['author_urls'] );
 	}
 
 	/**
@@ -99,42 +284,44 @@ class Test_Detection extends WP_UnitTestCase {
 	}
 
 	/**
-	 * A site with nothing published reads differently from one with several
-	 * writers, and gets its own sentence.
+	 * Author pages left open get the same sentence however many writers there
+	 * are, nothing published included.
+	 *
+	 * The old copy told an empty site there were no author pages to hide, and
+	 * ?author=1 redirects to the username on an empty site like any other.
 	 *
 	 * @return void
 	 */
-	public function test_an_empty_site_has_no_authors() {
+	public function test_open_author_pages_say_what_they_give_away() {
 		$this->assertSame( 0, Detection::authors() );
-		$this->assertFalse( Detection::opening_states()['author_urls'] );
-		$this->assertSame( 'off_none', Detection::state_variant( 'author_urls', false ) );
-	}
-
-	/**
-	 * One writer and several writers are different sentences too.
-	 *
-	 * @return void
-	 */
-	public function test_the_author_line_matches_the_number_of_writers() {
-		$this->writer();
-
-		$this->assertSame( 'off_one', Detection::state_variant( 'author_urls', false ) );
+		$this->assertSame( 'off_exposed', Detection::state_variant( 'author_urls', false ) );
 
 		$this->writer();
 
-		$this->assertSame( 'off_many', Detection::state_variant( 'author_urls', false ) );
-		$this->assertSame( array( 'authors' => 2 ), Detection::counts( 'author_urls', 'off_many' ) );
+		$this->assertSame( 'off_exposed', Detection::state_variant( 'author_urls', false ) );
+
+		$this->writer();
+
+		$this->assertSame( 'off_exposed', Detection::state_variant( 'author_urls', false ) );
 	}
 
 	/**
-	 * Author pages that are already hidden have nothing to report.
+	 * Author pages that are already hidden have nothing to report, unless
+	 * several people write here and their bylines may have been links.
 	 *
 	 * @return void
 	 */
-	public function test_hidden_author_pages_say_nothing() {
+	public function test_hidden_author_pages_mention_several_writers_only() {
+		$this->assertNull( Detection::state_variant( 'author_urls', true ) );
+
 		$this->writer();
 
 		$this->assertNull( Detection::state_variant( 'author_urls', true ) );
+
+		$this->writer();
+
+		$this->assertSame( 'on_many', Detection::state_variant( 'author_urls', true ) );
+		$this->assertSame( array( 'authors' => 2 ), Detection::counts( 'author_urls', 'on_many' ) );
 	}
 
 	/**
@@ -461,15 +648,17 @@ class Test_Detection extends WP_UnitTestCase {
 	}
 
 	/**
-	 * A closure counts, because nothing can prove it is core's.
+	 * A closure counts, because nothing can prove it is core's, and the row says
+	 * where it was written.
 	 *
 	 * Core registers named functions. Anything this class cannot name is
 	 * somebody else's, and the unrecognised case has to cost a switch rather
-	 * than a site.
+	 * than a site. A closure has no name, but it does have a file and a line,
+	 * which is the one thing the owner can go and look at.
 	 *
 	 * @return void
 	 */
-	public function test_an_unnameable_callback_counts() {
+	public function test_an_unnameable_callback_counts_and_is_named_by_file() {
 		add_filter(
 			'xmlrpc_methods',
 			function ( $methods ) {
@@ -478,6 +667,112 @@ class Test_Detection extends WP_UnitTestCase {
 		);
 
 		$this->assertTrue( Detection::xmlrpc_in_use() );
+
+		$blocker = Detection::xmlrpc_blocker();
+
+		$this->assertSame( 'blocked_closure', $blocker['variant'] );
+		$this->assertTrue( $blocker['retreat'] );
+
+		$counts = Detection::counts( 'block_xmlrpc', 'blocked_closure' );
+
+		$this->assertStringEndsWith( 'tests/cases/test-detection.php', $counts['file'] );
+		$this->assertGreaterThan( 0, (int) $counts['line'] );
+		$this->assertSame( (string) (int) $counts['line'], $counts['line'], 'The line is a string, printed as written.' );
+	}
+
+	/**
+	 * A method on an object counts too, and has no file to name.
+	 *
+	 * @return void
+	 */
+	public function test_an_object_method_counts_without_a_file() {
+		add_filter( 'xmlrpc_methods', array( $this, 'pass_through' ) );
+
+		$this->assertTrue( Detection::xmlrpc_in_use() );
+		$this->assertSame( 'blocked', Detection::xmlrpc_blocker()['variant'] );
+	}
+
+	/**
+	 * A filter callback that changes nothing.
+	 *
+	 * @param mixed $value Whatever was passed.
+	 * @return mixed The same.
+	 */
+	public function pass_through( $value ) {
+		return $value;
+	}
+
+	/**
+	 * A closure written in wp-config.php is the owner's, and not a site using
+	 * XML-RPC.
+	 *
+	 * Every Bitnami and Lightsail image appends one that drops pingback.ping.
+	 * Reflection is sound for a closure, because it is written where it is
+	 * hooked, and wp-config.php is nobody's plugin. The row says so, with the
+	 * line, and the switch stays free.
+	 *
+	 * @return void
+	 */
+	public function test_a_closure_in_wp_config_is_the_owners_own() {
+		$path = $this->hook_from_file( $this->scratch_dir() );
+
+		$this->set_owner_files( array( $path ) );
+
+		$this->assertFalse( Detection::xmlrpc_in_use() );
+		$this->assertNull( Detection::xmlrpc_blocker() );
+		$this->assertSame( 'off_config', Detection::state_variant( 'block_xmlrpc', false ) );
+
+		$counts = Detection::counts( 'block_xmlrpc', 'off_config' );
+
+		$this->assertSame( '2', $counts['line'] );
+	}
+
+	/**
+	 * The same closure from anywhere other than wp-config.php still counts.
+	 *
+	 * This is what keeps the owner-file rule from becoming a path test in
+	 * disguise: the file is the signal only because it is the owner's file.
+	 *
+	 * @return void
+	 */
+	public function test_the_same_closure_elsewhere_still_counts() {
+		$this->hook_from_file( $this->scratch_dir() );
+
+		$this->set_owner_files( array() );
+
+		$this->assertTrue( Detection::xmlrpc_in_use() );
+		$this->assertSame( 'blocked_closure', Detection::xmlrpc_blocker()['variant'] );
+	}
+
+	/**
+	 * The owner's closure does not hide anybody else's.
+	 *
+	 * Beside a named foreign function the row stays generic. Beside a foreign
+	 * closure the row names that closure, and never the one in wp-config.php.
+	 *
+	 * @return void
+	 */
+	public function test_the_owners_closure_hides_nobody_else() {
+		$path = $this->hook_from_file( $this->scratch_dir() );
+
+		$this->set_owner_files( array( $path ) );
+
+		add_filter( 'xmlrpc_methods', '__return_empty_array' );
+
+		$this->assertTrue( Detection::xmlrpc_in_use() );
+		$this->assertSame( 'blocked', Detection::xmlrpc_blocker()['variant'] );
+
+		remove_filter( 'xmlrpc_methods', '__return_empty_array' );
+
+		add_filter(
+			'xmlrpc_methods',
+			function ( $methods ) {
+				return $methods;
+			}
+		);
+
+		$this->assertSame( 'blocked_closure', Detection::xmlrpc_blocker()['variant'] );
+		$this->assertStringEndsWith( 'tests/cases/test-detection.php', Detection::counts( 'block_xmlrpc', 'blocked_closure' )['file'] );
 	}
 
 	/**

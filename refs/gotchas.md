@@ -159,6 +159,30 @@ returning `false` removes the users sitemap and its index entry.
 
 ---
 
+### `?author=N` leaks on a site with nothing published
+
+The redirect above looks the user up, not their posts, so an empty site hands
+over the username of user 1 as readily as a busy one. "Nothing is published
+here yet, so there are no author pages to hide" was on the screen under 1.1.1
+and was false.
+
+### A theme's author template is the signal, not its author link calls
+
+The opening state for author pages used to be "on if exactly one writer", and
+the number of writers was never the question: every account has an author
+address, written or not. The tempting replacement is to grep the theme for
+`get_author_posts_url()` or `the_author_posts_link()`, and it fails in the other
+direction. Every theme that prints a byline calls one of them whether or not the
+site shows bylines. GeneratePress, Storefront and Twenty Twenty-One all do, so
+that test would leave author pages open on nearly every site.
+
+A theme that ships `author.php`, or `templates/author.html` for a block theme,
+was built to show author pages, and that is rare: none of the default themes
+nor the three above carry one. `Detection::theme_has_author_template()` is four
+`file_exists()` calls across the child and parent, through
+`get_stylesheet_directory()` and `get_template_directory()`, which the tests
+redirect through core's own filters.
+
 ## Comments
 
 ### `comments_array` does not reach comment feeds
@@ -359,6 +383,61 @@ would leave the feature blocked until the name is added to
 
 The list is exhaustive for WordPress 6.8.3 and 7.1. Re-read
 `default-filters.php` when a new major release lands.
+
+### A closure is the one callback where reflection is the right question
+
+The rule above is about named functions, and it holds because a name can be
+hooked from anywhere. A closure cannot: it is written at the `add_filter()` call,
+so the file `ReflectionFunction::getFileName()` reports **is** the file that
+hooked it. It is also the only signal there is, since a closure has no name to
+match. So `Detection::closure_origin()` reflects closures, and only closures, and
+the row names the file and line for any closure that counts as use, which is the
+one thing an owner can go and look at.
+
+A closure written in `wp-config.php` does not count as use at all. No plugin
+writes there; it is the owner's file, or the host's on the owner's behalf. The
+list of owner files is `wp-config.php` in both places `wp-load.php` looks,
+resolved through `realpath()` so a symlinked install still matches. The tests
+point that list at a scratch file by reflection rather than write closures into
+a real `wp-config.php`.
+
+### Every Bitnami and Lightsail install hooks `xmlrpc_methods` from `wp-config.php`
+
+Bitnami's WordPress image, which is what AWS Lightsail ships, appends this to
+`wp-config.php`:
+
+```php
+if ( !defined( 'WP_CLI' ) ) {
+	add_filter("wp_headers", function($headers) {
+		unset($headers["X-Pingback"]);
+		return $headers;
+	});
+	add_filter( "xmlrpc_methods", function( $methods ) {
+		unset( $methods["pingback.ping"] );
+		return $methods;
+	});
+}
+```
+
+Three things about it that cost an afternoon on a live site:
+
+- It drops `pingback.ping` and nothing else. The endpoint stays live and the
+  login methods, `system.multicall` included, answer as before. It is a small
+  part of what blocking remote publishing does, not an alternative to it.
+- It is wrapped in `!defined( 'WP_CLI' )`, so anything probed with wp-cli shows
+  core's callback alone and the site looks clean. It is only there on web
+  requests.
+- It has to sit after the `require` of `wp-settings.php`, because `add_filter()`
+  does not exist before that file loads, and `wp-settings.php` fires `wp_loaded`
+  before it returns. So the closure is registered **after** `Plugin::retreat()`
+  has run and after `Plugin::boot()` has started the feature. Under 1.1.1 the
+  feature enforced if it was on, the retreat never fired, and the settings
+  screen, rendering later in the request, reported the switch as blocked and
+  disabled the checkbox. A switch that could not be turned on and could not be
+  turned off, over a snippet whose whole purpose was to restrict XML-RPC.
+
+Bitnami is a fading platform, but there are a great many sites still on it, and
+every one of them hits this.
 
 ### Jetpack has a second XML-RPC endpoint that is not xmlrpc.php
 

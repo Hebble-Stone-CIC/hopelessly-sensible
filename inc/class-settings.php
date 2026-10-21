@@ -328,17 +328,18 @@ class Settings {
 	 * Substitutes {token} placeholders in a piece of copy.
 	 *
 	 * The copy names the number it wants, so nothing has to declare which one
-	 * belongs to which sentence.
+	 * belongs to which sentence. A number is formatted for the locale. A string
+	 * is printed as written, which is what a file path or a line number wants.
 	 *
-	 * @param string             $text   Copy containing {token} placeholders.
-	 * @param array<string, int> $counts Token name, without braces, to number.
+	 * @param string                    $text   Copy containing {token} placeholders.
+	 * @param array<string, int|string> $counts Token name, without braces, to value.
 	 * @return string The copy with its placeholders filled in.
 	 */
 	public static function fill_counts( $text, array $counts ) {
 		$replacements = array();
 
 		foreach ( $counts as $token => $count ) {
-			$replacements[ '{' . $token . '}' ] = number_format_i18n( $count );
+			$replacements[ '{' . $token . '}' ] = is_int( $count ) ? number_format_i18n( $count ) : (string) $count;
 		}
 
 		return strtr( $text, $replacements );

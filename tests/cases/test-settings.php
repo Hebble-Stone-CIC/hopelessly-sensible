@@ -429,6 +429,28 @@ class Test_Settings extends WP_UnitTestCase {
 	}
 
 	/**
+	 * A number in a sentence is formatted, and a string is printed as written.
+	 *
+	 * A line number or a file path is a label rather than a quantity, and
+	 * "line 1,234" sends somebody to the wrong line.
+	 *
+	 * @return void
+	 */
+	public function test_placeholders_format_numbers_and_leave_strings_alone() {
+		$this->assertSame(
+			'1,234 things in wp-config.php at line 1234',
+			Settings::fill_counts(
+				'{count} things in {file} at line {line}',
+				array(
+					'count' => 1234,
+					'file'  => 'wp-config.php',
+					'line'  => '1234',
+				)
+			)
+		);
+	}
+
+	/**
 	 * An install already at the current schema is left alone.
 	 *
 	 * @return void

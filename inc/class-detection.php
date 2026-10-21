@@ -45,11 +45,16 @@ class Detection {
 	 * The only moment a switch is ever turned on for the owner. Features not named
 	 * here are never switched on automatically at all.
 	 *
+	 * Author pages open on unless the theme was built to show them. The number
+	 * of writers used to decide this, and it was the wrong question: every
+	 * account has an author address whether or not it has written anything, so
+	 * a site with several writers leaks exactly as much as a site with one.
+	 *
 	 * @return array<string, bool> Feature key to the state activation chose.
 	 */
 	public static function opening_states() {
 		return array(
-			'author_urls'      => ( 1 === self::authors() ),
+			'author_urls'      => ( false === self::theme_has_author_template() ),
 			'disable_comments' => ( 0 === self::comments_recent() ),
 		);
 	}
@@ -65,8 +70,8 @@ class Detection {
 	 * @return string|null A key into the feature's state_line array, or null.
 	 */
 	public static function state_variant( $key, $enabled ) {
-		if ( 'author_urls' === $key && false === $enabled ) {
-			return self::author_variant();
+		if ( 'author_urls' === $key ) {
+			return self::author_variant( $enabled );
 		}
 
 		if ( 'disable_comments' === $key ) {
@@ -74,28 +79,57 @@ class Detection {
 		}
 
 		if ( 'block_xmlrpc' === $key && false === $enabled ) {
-			return 'off_idle';
+			return null === self::xmlrpc_owner_closure() ? 'off_idle' : 'off_config';
 		}
 
 		return null;
 	}
 
 	/**
-	 * Which sentence belongs under author pages while they are being shown.
+	 * Which sentence belongs under author pages, on or off.
 	 *
-	 * Nobody at all is not a small number of writers. It is a site with nothing
-	 * published yet, and the copy says so separately.
+	 * Off, the line says what the pages give away, or why this theme might want
+	 * them. On, the one thing worth saying is to a site with several writers,
+	 * whose bylines may have been links until now. A site with nothing published
+	 * gets no sentence of its own: ?author=1 redirects to the username on an
+	 * empty site exactly as it does on a busy one.
 	 *
-	 * @return string A key into the feature's state_line array.
+	 * @param bool $enabled Whether author pages are currently hidden.
+	 * @return string|null A key into the feature's state_line array, or null.
 	 */
-	private static function author_variant() {
-		$authors = self::authors();
-
-		if ( 0 === $authors ) {
-			return 'off_none';
+	private static function author_variant( $enabled ) {
+		if ( false === $enabled ) {
+			return self::theme_has_author_template() ? 'off_theme' : 'off_exposed';
 		}
 
-		return 1 === $authors ? 'off_one' : 'off_many';
+		return self::authors() > 1 ? 'on_many' : null;
+	}
+
+	/**
+	 * Whether the active theme ships a template of its own for author pages.
+	 *
+	 * The one signal that a theme was built to show them. Calls to the author
+	 * link functions are no signal at all: every theme that prints a byline
+	 * carries one, whether or not the site shows bylines, so asking that would
+	 * leave author pages open on nearly every site. Four file checks, in the
+	 * child theme and its parent, and no reading of theme code.
+	 *
+	 * @return bool True when the child or parent theme has an author template.
+	 */
+	public static function theme_has_author_template() {
+		$directories = array_unique( array( get_stylesheet_directory(), get_template_directory() ) );
+
+		foreach ( $directories as $directory ) {
+			if ( file_exists( $directory . '/author.php' ) ) {
+				return true;
+			}
+
+			if ( file_exists( $directory . '/templates/author.html' ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -138,8 +172,16 @@ class Detection {
 	 * @return array<string, int> Token name, without braces, to number.
 	 */
 	public static function counts( $key, $variant ) {
-		if ( 'author_urls' === $key && 'off_many' === $variant ) {
+		if ( 'author_urls' === $key && 'on_many' === $variant ) {
 			return array( 'authors' => self::authors() );
+		}
+
+		if ( 'block_xmlrpc' === $key && 'off_config' === $variant ) {
+			return self::closure_tokens( self::xmlrpc_owner_closure() );
+		}
+
+		if ( 'block_xmlrpc' === $key && 'blocked_closure' === $variant ) {
+			return self::closure_tokens( self::xmlrpc_foreign_closure() );
 		}
 
 		if ( 'disable_comments' === $key && 'on_many' === $variant ) {
@@ -171,7 +213,7 @@ class Detection {
 		}
 
 		return array(
-			'variant' => 'blocked',
+			'variant' => null === self::xmlrpc_foreign_closure() ? 'blocked' : 'blocked_closure',
 			'retreat' => true,
 		);
 	}
@@ -463,7 +505,7 @@ class Detection {
 	 * @return bool True when something on this site extends XML-RPC.
 	 */
 	public static function xmlrpc_in_use() {
-		if ( true === self::has_foreign_filter( 'xmlrpc_methods', self::$core_xmlrpc_callbacks ) ) {
+		if ( null !== self::xmlrpc_foreign_callback() ) {
 			return true;
 		}
 
@@ -471,58 +513,250 @@ class Detection {
 	}
 
 	/**
-	 * Whether a hook carries any callback that is not one of core's own.
+	 * The first callback on xmlrpc_methods that belongs to neither core nor the
+	 * owner, if there is one.
+	 *
+	 * @return array<string, mixed>|null The callback's origin, or null when every
+	 *                                   callback is accounted for.
+	 */
+	private static function xmlrpc_foreign_callback() {
+		foreach ( self::unknown_callbacks( 'xmlrpc_methods', self::$core_xmlrpc_callbacks ) as $origin ) {
+			if ( false === $origin['owner'] ) {
+				return $origin;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * The first foreign callback on xmlrpc_methods whose file is known.
+	 *
+	 * Only a closure carries a file, so this is the closure the blocker line can
+	 * point at. A named foreign function answers null and the line stays generic.
+	 *
+	 * @return array<string, mixed>|null The closure's origin, or null.
+	 */
+	private static function xmlrpc_foreign_closure() {
+		foreach ( self::unknown_callbacks( 'xmlrpc_methods', self::$core_xmlrpc_callbacks ) as $origin ) {
+			if ( false === $origin['owner'] && '' !== $origin['file'] ) {
+				return $origin;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * The first closure on xmlrpc_methods written in wp-config.php, if any.
+	 *
+	 * @return array<string, mixed>|null The closure's origin, or null.
+	 */
+	private static function xmlrpc_owner_closure() {
+		foreach ( self::unknown_callbacks( 'xmlrpc_methods', self::$core_xmlrpc_callbacks ) as $origin ) {
+			if ( true === $origin['owner'] ) {
+				return $origin;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * The placeholders a sentence about a closure wants filled.
+	 *
+	 * The line is passed as a string so that it is printed as written: a line
+	 * number is a label rather than a quantity, and 1,234 is not one.
+	 *
+	 * @param array<string, mixed>|null $origin A callback origin, or null.
+	 * @return array<string, string> Token name to value.
+	 */
+	private static function closure_tokens( $origin ) {
+		if ( null === $origin ) {
+			return array();
+		}
+
+		return array(
+			'file' => $origin['file'],
+			'line' => (string) $origin['line'],
+		);
+	}
+
+	/**
+	 * Every callback on a hook that is not one of core's own, with where it came
+	 * from.
 	 *
 	 * Walks the registered callbacks rather than asking has_filter(), which
 	 * cannot tell core's registrations from anybody else's.
 	 *
-	 * Matched on the callback name and never on where the function is defined.
+	 * A named function is matched on its name and never on where it is defined.
 	 * Reflection would report the file a function was written in rather than who
 	 * hooked it, so a site whose own functions.php hooks a core helper, say
 	 * __return_empty_array, would be read as core and ignored. That site has made
 	 * a decision about XML-RPC and we would be overruling it silently.
 	 *
-	 * An unrecognised callback counts as somebody using the hook, which is the
-	 * direction that costs a switch rather than a site: a later WordPress adding
-	 * a second callback of its own leaves this feature blocked until the name is
-	 * added here, and nothing breaks in the meantime.
+	 * A closure is the one callback where the two questions have the same
+	 * answer: it is written at the add_filter() call, so the file it lives in is
+	 * the file that hooked it. Reflection is sound there and is the only signal
+	 * there is, since a closure has no name to match. One written in
+	 * wp-config.php is the owner's own, and no plugin's claim on XML-RPC: see
+	 * refs/gotchas.md, "XML-RPC". A closure from anywhere else, an object method,
+	 * or anything unrecognised counts as somebody using the hook, which is the
+	 * direction that costs a switch rather than a site.
 	 *
 	 * @param string   $hook  The hook to inspect.
 	 * @param string[] $known Callback names that belong to core.
-	 * @return bool True when something other than core has hooked it.
+	 * @return array<int, array<string, mixed>> One origin per unrecognised
+	 *                                          callback: 'owner', whether it was
+	 *                                          written in wp-config.php; 'file',
+	 *                                          its path relative to the site root
+	 *                                          or empty where unknown; 'line'.
 	 */
-	private static function has_foreign_filter( $hook, array $known ) {
+	private static function unknown_callbacks( $hook, array $known ) {
 		if ( false === has_filter( $hook ) ) {
-			return false;
+			return array();
 		}
 
 		if ( ! isset( $GLOBALS['wp_filter'][ $hook ] ) ) {
-			return false;
+			return array();
 		}
 
 		$registered = $GLOBALS['wp_filter'][ $hook ];
+		$unknown    = array(
+			'owner' => false,
+			'file'  => '',
+			'line'  => 0,
+		);
 
 		if ( ! isset( $registered->callbacks ) || ! is_array( $registered->callbacks ) ) {
-			return true;
+			return array( $unknown );
 		}
+
+		$origins = array();
 
 		foreach ( $registered->callbacks as $callbacks ) {
 			foreach ( $callbacks as $callback ) {
 				if ( ! isset( $callback['function'] ) ) {
-					return true;
+					$origins[] = $unknown;
+					continue;
 				}
 
-				if ( ! is_string( $callback['function'] ) ) {
-					return true;
+				$function = $callback['function'];
+
+				if ( is_string( $function ) && in_array( $function, $known, true ) ) {
+					continue;
 				}
 
-				if ( ! in_array( $callback['function'], $known, true ) ) {
-					return true;
+				if ( ! $function instanceof \Closure ) {
+					$origins[] = $unknown;
+					continue;
 				}
+
+				$origins[] = self::closure_origin( $function );
 			}
 		}
 
-		return false;
+		return $origins;
+	}
+
+	/**
+	 * Where a closure was written, and whether that is the owner's own file.
+	 *
+	 * @param \Closure $closure The closure to look at.
+	 * @return array<string, mixed> Its origin, with the file empty where
+	 *                              reflection could not say.
+	 */
+	private static function closure_origin( \Closure $closure ) {
+		$origin = array(
+			'owner' => false,
+			'file'  => '',
+			'line'  => 0,
+		);
+
+		try {
+			$reflection = new \ReflectionFunction( $closure );
+		} catch ( \ReflectionException $e ) {
+			return $origin;
+		}
+
+		$file = $reflection->getFileName();
+
+		if ( ! is_string( $file ) || '' === $file ) {
+			return $origin;
+		}
+
+		$real = realpath( $file );
+		$real = false === $real ? $file : $real;
+
+		$origin['owner'] = in_array( $real, self::owner_files(), true );
+		$origin['file']  = self::site_relative( $real );
+		$origin['line']  = (int) $reflection->getStartLine();
+
+		return $origin;
+	}
+
+	/**
+	 * A path as the owner would recognise it, relative to the site root where
+	 * it is under it.
+	 *
+	 * @param string $path An absolute path, already resolved.
+	 * @return string The path relative to ABSPATH, or unchanged if it is elsewhere.
+	 */
+	private static function site_relative( $path ) {
+		$roots = array_unique( array( realpath( ABSPATH ), ABSPATH ) );
+
+		foreach ( $roots as $root ) {
+			if ( ! is_string( $root ) || '' === $root ) {
+				continue;
+			}
+
+			$root = rtrim( $root, '/' ) . '/';
+
+			if ( 0 === strpos( $path, $root ) ) {
+				return substr( $path, strlen( $root ) );
+			}
+		}
+
+		return $path;
+	}
+
+	/**
+	 * The files that are the owner's own rather than any plugin's: wp-config.php,
+	 * in either of the two places core looks for it. Resolved once a request.
+	 *
+	 * The tests point this somewhere else by reflection, because no test should
+	 * be writing a closure into a real wp-config.php.
+	 *
+	 * @var string[]|null
+	 */
+	private static $owner_files = null;
+
+	/**
+	 * The resolved paths of the owner's own files.
+	 *
+	 * @return string[] Real paths, only of files that exist.
+	 */
+	private static function owner_files() {
+		if ( null !== self::$owner_files ) {
+			return self::$owner_files;
+		}
+
+		$candidates = array(
+			ABSPATH . 'wp-config.php',
+			dirname( ABSPATH ) . '/wp-config.php',
+		);
+
+		self::$owner_files = array();
+
+		foreach ( $candidates as $candidate ) {
+			$real = realpath( $candidate );
+
+			if ( false !== $real ) {
+				self::$owner_files[] = $real;
+			}
+		}
+
+		return self::$owner_files;
 	}
 
 	/**
