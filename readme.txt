@@ -73,9 +73,9 @@ No plugin can promise that and you should be wary of any that implies it. This o
 
 Because those need attention and this plugin is set and forget. Features that generate alerts generate work, work gets ignored and ignored alerts are worse than no alerts.
 
-= I am on Bitnami or AWS Lightsail. Why does it mention my wp-config.php? =
+= I am on Bitnami, or an older AWS Lightsail site. Why does it mention my wp-config.php? =
 
-Every Bitnami WordPress image, which is what Lightsail runs, ends wp-config.php with a short snippet that switches off pingbacks. It is a sensible default, but it is a small part of what "Block remote publishing" does: it removes one method from remote publishing and leaves the rest answering, including the login methods that password-guessing tools use. This plugin recognises a snippet in wp-config.php as yours rather than as a plugin's, says so under the switch, and still lets you switch it on. Once it is on, the whole of remote publishing is refused, pingbacks included, and the snippet has nothing left to do.
+Every Bitnami WordPress image ends wp-config.php with a short snippet that switches off pingbacks. Lightsail ran those images until early 2026, so older Lightsail sites carry it too. It is a sensible default, but it is a small part of what "Block remote publishing" does: it removes one method from remote publishing and leaves the rest answering, including the login methods that password-guessing tools use. This plugin recognises a snippet in wp-config.php as yours rather than as a plugin's, says so under the switch, and still lets you switch it on. Once it is on, the whole of remote publishing is refused, pingbacks included, and the snippet has nothing left to do.
 
 = I have a user called "admin" and it is warning me. What do I do? =
 
@@ -91,7 +91,7 @@ WordPress does not let you rename a user. The usual route is to create a second 
 = 1.2.0 =
 * Changed: "Hide author pages" is now switched on when the plugin is first activated, unless your theme ships a page design of its own for author pages. It used to be switched on only for sites with a single writer, which was the wrong question: every account has an author address whether or not it has written anything. Sites already running the plugin are left exactly as they are.
 * Changed: the note under "Hide author pages" now says what those pages give away, rather than counting writers.
-* Changed: a snippet in your wp-config.php that hooks into remote publishing, which every Bitnami and Lightsail install carries, no longer stops "Block remote publishing" being switched on. The note under the switch names the line and explains the difference.
+* Changed: a snippet in your wp-config.php that hooks into remote publishing, which every Bitnami install carries, older Lightsail sites included, no longer stops "Block remote publishing" being switched on. The note under the switch names the line and explains the difference.
 * Changed: when a snippet elsewhere on your site is using remote publishing, the note under the switch now names the file and line, so you know where to look.
 
 = 1.1.1 =

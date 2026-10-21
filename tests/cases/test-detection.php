@@ -706,7 +706,8 @@ class Test_Detection extends WP_UnitTestCase {
 	 * A closure written in wp-config.php is the owner's, and not a site using
 	 * XML-RPC.
 	 *
-	 * Every Bitnami and Lightsail image appends one that drops pingback.ping.
+	 * Every Bitnami image appends one that drops pingback.ping, and older
+	 * Lightsail sites run those images.
 	 * Reflection is sound for a closure, because it is written where it is
 	 * hooked, and wp-config.php is nobody's plugin. The row says so, with the
 	 * line, and the switch stays free.

@@ -183,7 +183,7 @@ line {line}, which is where to look if you no longer need it.
 The wp-config.php line makes no claim about what the snippet does, because the
 plugin cannot read it. What it says is true whatever the snippet does: this
 switch refuses the endpoint outright, so once it is on the snippet has nothing
-left to act on. Every Bitnami and Lightsail install carries one that drops
+left to act on. Every Bitnami install, older Lightsail sites included, carries one that drops
 pingbacks only, and leaves the login methods answering.
 
 `{file}` is a path relative to the site root, and `{line}` is printed as

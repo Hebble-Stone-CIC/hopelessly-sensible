@@ -401,9 +401,10 @@ resolved through `realpath()` so a symlinked install still matches. The tests
 point that list at a scratch file by reflection rather than write closures into
 a real `wp-config.php`.
 
-### Every Bitnami and Lightsail install hooks `xmlrpc_methods` from `wp-config.php`
+### Every Bitnami install hooks `xmlrpc_methods` from `wp-config.php`
 
-Bitnami's WordPress image, which is what AWS Lightsail ships, appends this to
+Bitnami's WordPress image, which AWS Lightsail shipped until it moved to an
+image of its own in early 2026, appends this to
 `wp-config.php`:
 
 ```php
